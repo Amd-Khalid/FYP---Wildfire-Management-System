@@ -2,264 +2,232 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Advanced Burn Scar Detection</title>
+    <title>FYP Disaster Analytics</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-
     <style>
-        :root {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: #0f172a;
-            color: #e5e7eb;
-        }
-
+        :root { font-family: 'Segoe UI', sans-serif; background: #020617; color: #f8fafc; }
         body { margin: 0; display: flex; height: 100vh; overflow: hidden; }
 
-        /* Sidebar for Controls */
+        /* Sidebar */
         .sidebar {
-            width: 350px;
-            background: #1e293b;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
-            z-index: 1000;
-            overflow-y: auto;
+            width: 400px; background: #0f172a; padding: 1.5rem; display: flex; flex-direction: column;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto; border-right: 1px solid #1e293b;
         }
-
         .map-container { flex-grow: 1; position: relative; }
         #map { width: 100%; height: 100%; }
 
-        h1 { margin: 0 0 1rem; font-size: 1.25rem; color: #60a5fa; }
-        .label { font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.25rem; display: block; }
-        input {
-            width: 100%;
-            background: #334155;
-            border: 1px solid #475569;
-            color: white;
-            padding: 0.5rem;
-            border-radius: 0.375rem;
-            margin-bottom: 1rem;
-            box-sizing: border-box;
-        }
+        h1 { margin: 0 0 0.5rem; font-size: 1.5rem; color: #3b82f6; letter-spacing: -0.5px; }
+        .subtitle { color: #64748b; font-size: 0.85rem; margin-bottom: 1.5rem; }
+
+        .control-group { background: #1e293b; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+        label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        input { width: 100%; background: #334155; border: 1px solid #475569; color: white; padding: 0.5rem; border-radius: 0.25rem; box-sizing: border-box; }
         
         button {
-            background: #2563eb;
-            color: white;
-            border: none;
-            padding: 0.75rem;
-            border-radius: 0.375rem;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            transition: background 0.2s;
+            background: #2563eb; color: white; border: none; padding: 0.75rem; border-radius: 0.25rem;
+            font-weight: 600; cursor: pointer; width: 100%; transition: all 0.2s;
         }
-        button:hover { background: #1d4ed8; }
-        button:disabled { background: #475569; cursor: not-allowed; }
+        button:hover { background: #1d4ed8; transform: translateY(-1px); }
+        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; transform: none; }
 
-        .results { margin-top: 2rem; display: none; }
-        .result-item { margin-bottom: 1.5rem; text-align: center; }
-        .result-item img {
-            width: 100%;
-            border-radius: 0.5rem;
-            border: 2px solid #334155;
-        }
-        .stats-box {
-            background: #0f172a;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-        }
-        .stat-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
-        .badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-            font-weight: bold;
-        }
-        .badge-high { background: #7f1d1d; color: #fecaca; }
-        .badge-mod { background: #7c2d12; color: #fed7aa; }
-        .badge-low { background: #713f12; color: #fef08a; }
+        /* Results Section */
+        .results { display: none; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Metrics Grid */
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+        .metric-card { background: #1e293b; padding: 0.75rem; border-radius: 0.5rem; text-align: center; border: 1px solid #334155; }
+        .metric-val { display: block; font-size: 1.25rem; font-weight: 700; color: #f1f5f9; }
+        .metric-label { font-size: 0.7rem; color: #94a3b8; }
+        .metric-danger { color: #ef4444; } 
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .tab-btn { background: #1e293b; padding: 0.5rem; flex: 1; font-size: 0.8rem; border-radius: 0.25rem; cursor: pointer; text-align: center; border: 1px solid #334155; }
+        .tab-btn.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        img { width: 100%; border-radius: 0.5rem; border: 1px solid #475569; margin-bottom: 0.5rem; }
         
-        /* Loading Overlay */
-        #loader {
-            display: none;
-            text-align: center;
-            margin: 1rem 0;
-            color: #60a5fa;
-        }
+        #loader { display: none; text-align: center; margin: 2rem 0; color: #60a5fa; }
+        
+        .infra-item { display: flex; justify-content: space-between; padding: 0.5rem; background: #334155; margin-bottom: 0.25rem; border-radius: 0.25rem; font-size: 0.85rem; }
     </style>
 </head>
 <body>
 
-    <div class="sidebar">
-        <h1>🔥 Burn Scar Analytics</h1>
-        
-        <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 1.5rem;">
-            Use the toolbar on the map to draw a rectangle over the area you want to analyze.
-        </p>
+<div class="sidebar">
+    <h1>BurnScar AI</h1>
+    <div class="subtitle">Final Year Project - Disaster Analytics</div>
 
-        <div>
-            <label class="label">Analysis Date Range</label>
-            <div style="display: flex; gap: 0.5rem;">
-                <input type="date" id="dateFrom" value="2023-08-01">
-                <input type="date" id="dateTo" value="2023-08-30">
-            </div>
-        </div>
-
-        <input type="hidden" id="minLon">
-        <input type="hidden" id="minLat">
-        <input type="hidden" id="maxLon">
-        <input type="hidden" id="maxLat">
-
-        <button id="analyzeBtn" onclick="runAnalysis()" disabled>Draw Area First</button>
-        
-        <div id="loader">Processing Satellite Data...<br><small>(This may take 10-20 seconds)</small></div>
-
-        <div class="results" id="resultsArea">
-            <div class="stats-box" id="statsContent"></div>
-            
-            <div class="result-item">
-                <span class="label">Severity Analysis</span>
-                <img id="severityImg" src="" alt="Severity Map">
-            </div>
-            <div class="result-item">
-                <span class="label">Burn Mask Overlay</span>
-                <img id="overlayImg" src="" alt="Overlay">
-            </div>
-            <div class="result-item">
-                <span class="label">True Color (RGB)</span>
-                <img id="rgbImg" src="" alt="RGB">
-            </div>
+    <div class="control-group">
+        <label>Date Range</label>
+        <div style="display: flex; gap: 0.5rem;">
+            <input type="date" id="dateFrom" value="2023-08-08">
+            <input type="date" id="dateTo" value="2023-08-15">
         </div>
     </div>
-
-    <div class="map-container">
-        <div id="map"></div>
-    </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     
-    <script>
-        const API_BASE = "http://localhost:8000"; // Adjust if needed
+    <input type="hidden" id="minLon"><input type="hidden" id="minLat">
+    <input type="hidden" id="maxLon"><input type="hidden" id="maxLat">
 
-        // Initialize Map
-        const map = L.map('map').setView([33.68, 73.04], 6); // Default to Pakistan, zoom out
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+    <button id="analyzeBtn" onclick="runAnalysis()" disabled>Draw Region on Map</button>
+    <div id="loader">Running Advanced Analysis...<br><small>Querying Satellite & Infrastructure Data</small></div>
 
-        // Feature Group for the drawn box
-        const drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
+    <div class="results" id="resultsArea">
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <span class="metric-val metric-danger" id="valArea">0</span>
+                <span class="metric-label">Hectares Burned</span>
+            </div>
+            <div class="metric-card">
+                <span class="metric-val" id="valCO2">0</span>
+                <span class="metric-label">Est. CO2 (Tonnes)</span>
+            </div>
+        </div>
 
-        // Initialize Draw Control
-        const drawControl = new L.Control.Draw({
-            draw: {
-                polygon: false,
-                marker: false,
-                circle: false,
-                circlemarker: false,
-                polyline: false,
-                rectangle: { shapeOptions: { color: '#ef4444' } }
-            },
-            edit: { featureGroup: drawnItems }
-        });
-        map.addControl(drawControl);
+        <div class="control-group">
+            <label>Infrastructure at Risk</label>
+            <div class="infra-item">
+                <span>Buildings Affected</span>
+                <strong id="valBuildings" style="color: #fca5a5">0</strong>
+            </div>
+            <div class="infra-item">
+                <span>Road Segments</span>
+                <strong id="valRoads" style="color: #fdba74">0</strong>
+            </div>
+        </div>
 
-        // Handle Draw Events
-        map.on(L.Draw.Event.CREATED, function (e) {
-            drawnItems.clearLayers(); // Only allow one box
-            const layer = e.layer;
-            drawnItems.addLayer(layer);
-            
-            const bounds = layer.getBounds();
-            updateCoords(bounds);
-        });
+        <div class="tabs">
+            <div class="tab-btn active" onclick="switchTab('overlay')">Map Overlay</div>
+            <div class="tab-btn" onclick="switchTab('severity')">Severity</div>
+            <div class="tab-btn" onclick="switchTab('compare')">Before/After</div>
+        </div>
 
-        map.on(L.Draw.Event.EDITED, function (e) {
-            e.layers.eachLayer(function(layer) {
-                updateCoords(layer.getBounds());
+        <div id="tab-overlay" class="tab-content active">
+            <label>Burn Detection Overlay</label>
+            <img id="overlayImg" src="">
+        </div>
+
+        <div id="tab-severity" class="tab-content">
+            <label>Burn Severity Index</label>
+            <img id="severityImg" src="">
+            <div style="display: flex; gap: 5px; margin-top: 5px;">
+                <div style="background:#fde047; height:4px; flex:1"></div>
+                <div style="background:#f97316; height:4px; flex:1"></div>
+                <div style="background:#7f1d1d; height:4px; flex:1"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8;">
+                <span>Low</span><span>Moderate</span><span>High</span>
+            </div>
+        </div>
+
+        <div id="tab-compare" class="tab-content">
+            <label>Pre-Fire Baseline (approx 1-2 months prior)</label>
+            <img id="preFireImg" src="" alt="Pre-fire image unavailable">
+            <label>Post-Fire Result</label>
+            <img id="rgbImg" src="">
+        </div>
+    </div>
+</div>
+
+<div class="map-container">
+    <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script>
+    const API_BASE = "http://localhost:8000";
+
+    const map = L.map('map').setView([20.88, -156.68], 11); // Maui Default
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    const drawControl = new L.Control.Draw({
+        draw: { polygon: false, marker: false, circle: false, circlemarker: false, polyline: false, rectangle: { shapeOptions: { color: '#ef4444' } } },
+        edit: { featureGroup: drawnItems }
+    });
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, e => {
+        drawnItems.clearLayers();
+        drawnItems.addLayer(e.layer);
+        updateCoords(e.layer.getBounds());
+    });
+
+    function updateCoords(bounds) {
+        document.getElementById('minLat').value = bounds.getSouth();
+        document.getElementById('maxLat').value = bounds.getNorth();
+        document.getElementById('minLon').value = bounds.getWest();
+        document.getElementById('maxLon').value = bounds.getEast();
+        document.getElementById('analyzeBtn').disabled = false;
+        document.getElementById('analyzeBtn').innerText = "Run Full Analysis";
+    }
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    async function runAnalysis() {
+        const btn = document.getElementById('analyzeBtn');
+        const loader = document.getElementById('loader');
+        const results = document.getElementById('resultsArea');
+        
+        btn.disabled = true; loader.style.display = 'block'; results.style.display = 'none';
+
+        const payload = {
+            min_lon: parseFloat(document.getElementById('minLon').value),
+            min_lat: parseFloat(document.getElementById('minLat').value),
+            max_lon: parseFloat(document.getElementById('maxLon').value),
+            max_lat: parseFloat(document.getElementById('maxLat').value),
+            date_from: document.getElementById('dateFrom').value,
+            date_to: document.getElementById('dateTo').value
+        };
+
+        try {
+            const resp = await fetch(`${API_BASE}/predict_with_bbox`, {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
             });
-        });
+            if (!resp.ok) throw new Error(await resp.text());
+            const data = await resp.json();
 
-        function updateCoords(bounds) {
-            document.getElementById('minLat').value = bounds.getSouth();
-            document.getElementById('maxLat').value = bounds.getNorth();
-            document.getElementById('minLon').value = bounds.getWest();
-            document.getElementById('maxLon').value = bounds.getEast();
-            
-            const btn = document.getElementById('analyzeBtn');
-            btn.disabled = false;
-            btn.textContent = "Run Analysis";
-            btn.style.background = "#2563eb";
-        }
-
-        async function runAnalysis() {
-            const btn = document.getElementById('analyzeBtn');
-            const loader = document.getElementById('loader');
-            const results = document.getElementById('resultsArea');
-            
-            btn.disabled = true;
-            loader.style.display = 'block';
-            results.style.display = 'none';
-
-            const payload = {
-                min_lon: parseFloat(document.getElementById('minLon').value),
-                min_lat: parseFloat(document.getElementById('minLat').value),
-                max_lon: parseFloat(document.getElementById('maxLon').value),
-                max_lat: parseFloat(document.getElementById('maxLat').value),
-                date_from: document.getElementById('dateFrom').value,
-                date_to: document.getElementById('dateTo').value
-            };
-
-            try {
-                const resp = await fetch(`${API_BASE}/predict_with_bbox`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!resp.ok) throw new Error("Analysis failed");
-                const data = await resp.json();
-
-                // Update Images
-                document.getElementById('rgbImg').src = "data:image/png;base64," + data.rgb_base64;
-                document.getElementById('overlayImg').src = "data:image/png;base64," + data.overlay_base64;
-                document.getElementById('severityImg').src = "data:image/png;base64," + data.severity_base64;
-
-                // Update Stats
-                const statsHtml = `
-                    <div class="stat-row"><span>Total Area:</span> <strong>${(data.total_pixels * 100 / 10000).toFixed(1)} ha</strong></div>
-                    <div class="stat-row"><span>Burned Area:</span> <strong>${(data.burned_pixels * 100 / 10000).toFixed(1)} ha</strong></div>
-                    <hr style="border-color: #334155; margin: 0.5rem 0;">
-                    <div class="stat-row">
-                        <span class="badge badge-high">High Severity</span>
-                        <span>${(data.severity_breakdown.high * 100).toFixed(1)}%</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="badge badge-mod">Moderate</span>
-                        <span>${(data.severity_breakdown.moderate * 100).toFixed(1)}%</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="badge badge-low">Low</span>
-                        <span>${(data.severity_breakdown.low * 100).toFixed(1)}%</span>
-                    </div>
-                `;
-                document.getElementById('statsContent').innerHTML = statsHtml;
-
-                results.style.display = 'block';
-            } catch (e) {
-                alert("Error: " + e.message);
-            } finally {
-                btn.disabled = false;
-                loader.style.display = 'none';
+            // Images
+            document.getElementById('rgbImg').src = "data:image/png;base64," + data.rgb_base64;
+            document.getElementById('overlayImg').src = "data:image/png;base64," + data.overlay_base64;
+            document.getElementById('severityImg').src = "data:image/png;base64," + data.severity_base64;
+            if(data.pre_fire_base64) {
+                document.getElementById('preFireImg').src = "data:image/png;base64," + data.pre_fire_base64;
+            } else {
+                document.getElementById('preFireImg').alt = "No pre-fire image available";
             }
+
+            // Stats
+            document.getElementById('valArea').innerText = data.burned_area_ha;
+            document.getElementById('valCO2').innerText = data.co2_tonnes;
+            
+            // Infrastructure
+            if(data.infrastructure) {
+                document.getElementById('valBuildings').innerText = data.infrastructure.buildings_risk;
+                document.getElementById('valRoads').innerText = data.infrastructure.roads_risk;
+            }
+
+            results.style.display = 'block';
+        } catch (e) {
+            alert("Analysis Error: " + e.message);
+        } finally {
+            btn.disabled = false; loader.style.display = 'none';
         }
-    </script>
+    }
+</script>
 </body>
 </html>
