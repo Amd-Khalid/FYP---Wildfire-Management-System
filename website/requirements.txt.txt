@@ -1,0 +1,18 @@
+# Web Framework
+fastapi
+uvicorn
+python-multipart
+requests
+
+# Data Science & Math
+numpy
+scipy
+matplotlib
+
+# AI & Computer Vision
+torch
+torchvision
+segmentation-models-pytorch
+
+# Geospatial
+rasterio
