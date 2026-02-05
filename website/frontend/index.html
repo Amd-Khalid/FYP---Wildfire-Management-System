@@ -2,35 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>FYP Disaster Analytics</title>
+    <title>FEWMS — Wildfire Analytics</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { font-family: 'Segoe UI', sans-serif; background: #020617; color: #f8fafc; }
+        :root {
+            --font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+            --bg: #020617;
+            --panel: linear-gradient(180deg,#0b1220 0%, #0f172a 100%);
+            --text: #f8fafc;
+            --muted: #9aa6b2;
+            --control-bg: #1e293b;
+            --control-border: rgba(71,85,105,0.35);
+            --accent: #f97316;
+            --accent-amber: #fb923c;
+            --radius: 10px;
+            font-family: var(--font-family);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 15px;
+            line-height: 1.45;
+        }
+
         body { margin: 0; display: flex; height: 100vh; overflow: hidden; }
 
         /* Sidebar */
         .sidebar {
-            width: 400px; background: #0f172a; padding: 1.5rem; display: flex; flex-direction: column;
-            box-shadow: 4px 0 15px rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto; border-right: 1px solid #1e293b;
+            width: 380px; background: var(--panel); padding: 1.5rem; display: flex; flex-direction: column;
+            box-shadow: 6px 0 20px rgba(0,0,0,0.6); z-index: 1000; overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.03);
         }
         .map-container { flex-grow: 1; position: relative; }
         #map { width: 100%; height: 100%; }
 
-        h1 { margin: 0 0 0.5rem; font-size: 1.5rem; color: #3b82f6; letter-spacing: -0.5px; }
-        .subtitle { color: #64748b; font-size: 0.85rem; margin-bottom: 1.5rem; }
+        /* Headings */
+        h1 { margin: 0 0 0.5rem; font-size: 1.25rem; color: var(--accent); letter-spacing: -0.2px; font-weight: 600; line-height: 1.15; }
+        .subtitle { color: var(--muted); font-size: 0.86rem; margin-bottom: 1rem; }
 
-        .control-group { background: #1e293b; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
-        label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px; }
-        input { width: 100%; background: #334155; border: 1px solid #475569; color: white; padding: 0.5rem; border-radius: 0.25rem; box-sizing: border-box; }
+        /* Controls */
+        .control-group { background: var(--control-bg); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+        label { display: block; font-size: 0.72rem; color: #9aa6b2; margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+        input, select { width: 100%; background: #2d3945; border: 1px solid var(--control-border); color: var(--text); padding: 0.6rem 0.65rem; border-radius: 8px; box-sizing: border-box; font-size: 0.95rem; }
+        input::placeholder, select::placeholder { color: rgba(255,255,255,0.28); }
+        input:focus, select:focus { outline: none; box-shadow: 0 4px 18px rgba(249,115,22,0.06); border-color: rgba(249,115,22,0.18); }
+        .small-note { font-size: 0.78rem; color: #9aa6b2; }
         
-        button {
-            background: #2563eb; color: white; border: none; padding: 0.75rem; border-radius: 0.25rem;
-            font-weight: 600; cursor: pointer; width: 100%; transition: all 0.2s;
-        }
-        button:hover { background: #1d4ed8; transform: translateY(-1px); }
-        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; transform: none; }
+
 
         /* Results Section */
         .results { display: none; animation: fadeIn 0.5s ease; }
@@ -46,11 +66,65 @@
         /* Tabs */
         .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
         .tab-btn { background: #1e293b; padding: 0.5rem; flex: 1; font-size: 0.8rem; border-radius: 0.25rem; cursor: pointer; text-align: center; border: 1px solid #334155; }
-        .tab-btn.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .tab-btn:hover { background: rgba(249,115,22,0.06); border-color: rgba(249,115,22,0.08); color: #fff; }
+        .tab-btn.active { background: #f97316; border-color: #f97316; color: white; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        img { width: 100%; border-radius: 0.5rem; border: 1px solid #475569; margin-bottom: 0.5rem; }
+        /* Overlay Toggle Buttons */
+        .overlay-btn { background: #0b1324; color: #cbd5e1; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer; flex: 1; font-weight: 600; }
+        .overlay-btn:disabled { background: #0f172a; color: #475569; cursor: not-allowed; }
+        .overlay-btn.active { background: #f97316; border-color: #f97316; color: white; }
+        .overlay-btn:hover { background: rgba(251,146,60,0.08); color: #fff3ea; border-color: rgba(251,146,60,0.12); }
+        .overlay-control .overlay-btn { padding: 0.38rem 0.55rem; font-size: 0.85rem; }
+
+        /* App Header */
+        .app-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+        .app-title-img { height:28px; width:auto; display:block; margin-bottom:4px; }
+        h1 { margin: 0 0 0.25rem; font-size: 1.05rem; color: #f97316; letter-spacing: -0.2px; font-weight:600; }
+        .subtitle { color: #9aa6b2; font-size: 0.8rem; margin-bottom: 0.6rem; }
+
+        /* Buttons */
+        button { background: #f97316; color: white; border: none; padding: 0.62rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; width: 100%; transition: all 0.12s ease; box-shadow: 0 4px 12px rgba(249,115,22,0.08); }
+        button:hover { background: #fb923c; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(251,146,60,0.12); }
+        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; transform: none; box-shadow:none; }
+
+        /* Metrics */
+        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+        .metric-card { background: linear-gradient(180deg,#0f172a 0%, #091022 100%); padding: 0.9rem; border-radius: 0.75rem; display:flex; flex-direction:column; align-items:flex-start; gap:0.25rem; border: 1px solid rgba(255,255,255,0.04); }
+        .metric-top { display:flex; width:100%; justify-content:space-between; align-items:center; }
+        .metric-val { display: block; font-size: 1.5rem; font-weight: 700; color: #f1f5f9; }
+        .metric-label { font-size: 0.72rem; color: #94a3b8; }
+
+        /* Global Loader Overlay */
+        .global-loader { position: fixed; top:0; left:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; background: rgba(2,6,23,0.6); z-index: 2000; }
+        .global-loader .panel { background: #0f172a; padding: 1rem 1.25rem; border-radius: 0.5rem; display:flex; gap:0.75rem; align-items:center; box-shadow: 0 10px 30px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.04); }
+        .spinner { width: 28px; height: 28px; border-radius:50%; border:4px solid rgba(255,255,255,0.12); border-top-color: #fb923c; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Overlay Opacity Slider */
+        .overlay-slider { width:96px; -webkit-appearance:none; appearance:none; background: transparent; height: 8px; }
+        .overlay-slider:focus { outline: none; }
+        .overlay-slider::-webkit-slider-runnable-track { height: 8px; background: rgba(249,115,22,0.14); border-radius: 6px; }
+        .overlay-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #f97316; box-shadow: 0 2px 6px rgba(249,115,22,0.25); margin-top: -3px; border: 2px solid rgba(255,255,255,0.06); }
+        .overlay-slider::-moz-range-track { height: 8px; background: rgba(249,115,22,0.14); border-radius: 6px; }
+        .overlay-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #f97316; border: 2px solid rgba(255,255,255,0.06); box-shadow: 0 2px 6px rgba(249,115,22,0.25); }
+        .overlay-slider::-ms-track { height: 8px; background: transparent; border-color: transparent; color: transparent; }
+        .overlay-slider::-ms-fill-lower { background: rgba(249,115,22,0.14); border-radius:6px; }
+        .overlay-slider::-ms-fill-upper { background: rgba(249,115,22,0.14); border-radius:6px; }
+
+        /* Slight hover for the rectangle to improve affordance */
+        .leaflet-interactive:hover { filter: drop-shadow(0 0 4px rgba(255,255,255,0.08)); }
+
+        /* Powered-by logo small override */
+        .powered-by img { width: auto; height: 20px; border-radius: 0; border: none; margin: 0; opacity: 0.95; filter: none; }
+
+        /* Small layout polish */
+        .sidebar { font-size: 14px; }
+
+
+
+        .tab-content img { width: 100%; border-radius: 0.5rem; border: 1px solid #475569; margin-bottom: 0.5rem; }
         
         #loader { display: none; text-align: center; margin: 2rem 0; color: #60a5fa; }
         
@@ -60,8 +134,12 @@
 <body>
 
 <div class="sidebar">
-    <h1>BurnScar AI</h1>
-    <div class="subtitle">Final Year Project - Disaster Analytics</div>
+    <div class="app-header">
+        <div class="app-title">
+            <img src="fewms.png" alt="FEWMS" class="app-title-img">
+            <div class="subtitle">FarmEvo Wildfire Management System</div>
+        </div>
+    </div>
 
     <div class="control-group">
         <label>Date Range</label>
@@ -74,7 +152,7 @@
     <div class="control-group">
         <label>Preset Fires</label>
         <select id="presetSelect" style="width:100%; padding:0.5rem; background:#334155; color:white; border-radius:0.25rem; border:1px solid #475569;">
-            <option value="">-- Select a preset fire --</option>
+            <option value="">Select a preset fire</option>
         </select>
     </div>
     
@@ -139,10 +217,27 @@
             <img id="rgbImg" src="">
         </div>
     </div>
+        <div style="margin-top:auto; padding-top:1rem; border-top:1px solid rgba(255,255,255,0.03);">
+            <div class="powered-by" style="display:flex; align-items:center; gap:0.6rem; margin-top:0.4rem;">
+                <span style="font-size:0.82rem; color:#9aa6b2;">Powered by</span>
+                <img src="logo.png" alt="Partner logo" style="height:20px; width:auto; opacity:0.95; filter:grayscale(0.05);">
+            </div>
+        </div>
 </div>
 
 <div class="map-container">
     <div id="map"></div>
+</div>
+
+<!-- Global Loader Overlay -->
+<div id="globalLoader" class="global-loader" role="status" aria-live="polite">
+    <div class="panel">
+        <div class="spinner" aria-hidden="true"></div>
+        <div style="color:#cbd5e1; font-size:0.95rem;">
+            <div style="font-weight:700;">Running Analysis</div>
+            <div style="font-size:0.82rem; color:#94a3b8;">Querying satellite and infrastructure datasets…</div>
+        </div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -179,16 +274,74 @@
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
     const drawControl = new L.Control.Draw({
-        draw: { polygon: false, marker: false, circle: false, circlemarker: false, polyline: false, rectangle: { shapeOptions: { color: '#ef4444' } } },
+        draw: { polygon: false, marker: false, circle: false, circlemarker: false, polyline: false, rectangle: { shapeOptions: { color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 } } },
         edit: { featureGroup: drawnItems }
     });
     map.addControl(drawControl);
 
     map.on(L.Draw.Event.CREATED, e => {
         drawnItems.clearLayers();
+        // Ensure drawn layer uses the strong white stroke and subtle fill style
+        if (e.layer && typeof e.layer.setStyle === 'function') {
+            e.layer.setStyle({ color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 });
+        }
         drawnItems.addLayer(e.layer);
         updateCoords(e.layer.getBounds());
     });
+
+    // Add compact overlay toggle control to map (top-right)
+    const overlayControl = L.control({ position: 'topright' });
+    overlayControl.onAdd = function(map) {
+        const container = L.DomUtil.create('div', 'overlay-control leaflet-bar');
+        container.style.background = 'rgba(11,19,36,0.9)';
+        container.style.padding = '6px';
+        container.style.borderRadius = '6px';
+        container.style.display = 'flex';
+        container.style.gap = '6px';
+        container.innerHTML = '<button id="overlayBeforeBtn" class="overlay-btn" onclick="setMapOverlay(\'before\')" disabled title="Show pre-fire image">Before</button><button id="overlayAfterBtn" class="overlay-btn" onclick="setMapOverlay(\'after\')" disabled title="Show post-fire image">After</button><input id="overlayOpacity" class="overlay-slider" type="range" min="0" max="1" step="0.05" value="0.9" title="Overlay opacity" />';
+        L.DomEvent.disableClickPropagation(container);
+        return container;
+    };
+    overlayControl.addTo(map);
+
+    // Hook slider to overlay opacity
+    const afterOpacityEl = document.getElementById('overlayOpacity');
+    if (afterOpacityEl) {
+        afterOpacityEl.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            if (overlayBefore) overlayBefore.setOpacity(val);
+            if (overlayAfter) overlayAfter.setOpacity(val);
+        });
+    }
+
+    // Overlay variables and helpers
+    let overlayBefore = null;
+    let overlayAfter = null;
+
+    function clearOverlays() {
+        if (overlayBefore) { map.removeLayer(overlayBefore); overlayBefore = null; }
+        if (overlayAfter) { map.removeLayer(overlayAfter); overlayAfter = null; }
+        const beforeBtn = document.getElementById('overlayBeforeBtn');
+        const afterBtn = document.getElementById('overlayAfterBtn');
+        if (beforeBtn) { beforeBtn.disabled = true; beforeBtn.classList.remove('active'); }
+        if (afterBtn) { afterBtn.disabled = true; afterBtn.classList.remove('active'); }
+    }
+
+    function setMapOverlay(mode) {
+        // Remove existing overlays
+        if (overlayBefore) map.removeLayer(overlayBefore);
+        if (overlayAfter) map.removeLayer(overlayAfter);
+        document.getElementById('overlayBeforeBtn').classList.remove('active');
+        document.getElementById('overlayAfterBtn').classList.remove('active');
+
+        if (mode === 'before' && overlayBefore) {
+            overlayBefore.addTo(map);
+            document.getElementById('overlayBeforeBtn').classList.add('active');
+        } else if (mode === 'after' && overlayAfter) {
+            overlayAfter.addTo(map);
+            document.getElementById('overlayAfterBtn').classList.add('active');
+        }
+    }
 
     // Populate preset select and wire up change handler
     window.addEventListener('load', () => {
@@ -214,7 +367,8 @@
 
             // Draw rectangle on map and update hidden inputs
             drawnItems.clearLayers();
-            const rect = L.rectangle(bounds, { color: '#ef4444' });
+            const rect = L.rectangle(bounds, { color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 });
+            rect.setStyle({ color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 });
             drawnItems.addLayer(rect);
             map.fitBounds(bounds);
             updateCoords(rect.getBounds());
@@ -231,6 +385,8 @@
         document.getElementById('maxLon').value = bounds.getEast();
         document.getElementById('analyzeBtn').disabled = false;
         document.getElementById('analyzeBtn').innerText = "Run Full Analysis";
+        // Clear any existing map overlays when the region changes
+        clearOverlays();
     }
 
     function switchTab(tabName) {
@@ -244,8 +400,9 @@
         const btn = document.getElementById('analyzeBtn');
         const loader = document.getElementById('loader');
         const results = document.getElementById('resultsArea');
+        const globalLoader = document.getElementById('globalLoader');
         
-        btn.disabled = true; loader.style.display = 'block'; results.style.display = 'none';
+        btn.disabled = true; loader.style.display = 'block'; if (globalLoader) globalLoader.style.display = 'flex'; results.style.display = 'none';
 
         const payload = {
             min_lon: parseFloat(document.getElementById('minLon').value),
@@ -273,6 +430,29 @@
                 document.getElementById('preFireImg').alt = "No pre-fire image available";
             }
 
+            // Remove previous overlays and create new ones
+            const bounds = [[payload.min_lat, payload.min_lon], [payload.max_lat, payload.max_lon]];
+            clearOverlays();
+
+            const opEl = document.getElementById('overlayOpacity');
+            const opVal = opEl ? parseFloat(opEl.value) : 0.9;
+
+            // After (post-fire) overlay - always created
+            overlayAfter = L.imageOverlay("data:image/png;base64," + data.rgb_base64, bounds, {opacity: opVal});
+            document.getElementById('overlayAfterBtn').disabled = false;
+
+            // Before (pre-fire) overlay - create only if available
+            if (data.pre_fire_base64) {
+                overlayBefore = L.imageOverlay("data:image/png;base64," + data.pre_fire_base64, bounds, {opacity: opVal});
+                document.getElementById('overlayBeforeBtn').disabled = false;
+            } else {
+                document.getElementById('overlayBeforeBtn').disabled = true;
+            }
+
+            // Show the post-fire overlay by default and zoom to the selected area
+            setMapOverlay('after');
+            map.fitBounds(bounds);
+
             // Stats
             document.getElementById('valArea').innerText = data.burned_area_ha;
             document.getElementById('valCO2').innerText = data.co2_tonnes;
@@ -285,9 +465,11 @@
 
             results.style.display = 'block';
         } catch (e) {
+            // Ensure overlays are cleared on error
+            clearOverlays();
             alert("Analysis Error: " + e.message);
         } finally {
-            btn.disabled = false; loader.style.display = 'none';
+            btn.disabled = false; loader.style.display = 'none'; if (globalLoader) globalLoader.style.display = 'none';
         }
     }
 </script>
