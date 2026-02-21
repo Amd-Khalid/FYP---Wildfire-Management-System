@@ -10,7 +10,7 @@ import math
 from datetime import datetime, timedelta
 
 # --------------------------------------------------------
-# 1. SYSTEM PATH FIX
+# 1. SYSTEM PATH & CONFIG
 # --------------------------------------------------------
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent
@@ -20,312 +20,202 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Visualization
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-from scipy.ndimage import binary_opening, binary_closing, label
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
+from scipy.ndimage import binary_closing, label
 import rasterio.features
 from rasterio.transform import from_bounds
 
 # Local imports
 from model.burn_scar_inference import BurnScarInference, SentinelHubAPI
 
+# Define paths
+BASE_DIR = Path(__file__).parent.parent
+DET_WEIGHTS = BASE_DIR / "model" / "best_unet_burn_scar.pth"
+PRED_WEIGHTS = BASE_DIR / "model" / "best_unet_prediction.pth"
+
+app = FastAPI(title="Burn Scar & Prediction API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Initialize Engine
+bbox_inference_engine = BurnScarInference(
+    detection_path=str(DET_WEIGHTS),
+    prediction_path=str(PRED_WEIGHTS) if PRED_WEIGHTS.exists() else None
+)
+sentinel_api = SentinelHubAPI()
+
+class BBoxRequest(BaseModel):
+    min_lon: float; min_lat: float; max_lon: float; max_lat: float
+    date_from: str; date_to: str
+
+# -----------------------------------------------------------
+# HELPERS
+# -----------------------------------------------------------
 def fig_to_base64(fig):
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor='#0f172a')
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", transparent=True, pad_inches=0)
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("utf-8")
 
-BASE_DIR = Path(__file__).parent.parent
-WEIGHTS_PATH = BASE_DIR / "model" / "best_unet_burn_scar.pth"
-
-app = FastAPI(title="Burn Scar Analytics API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-bbox_inference_engine = BurnScarInference(str(WEIGHTS_PATH))
-sentinel_api = SentinelHubAPI()
-
-class BBoxRequest(BaseModel):
-    min_lon: float
-    min_lat: float
-    max_lon: float
-    max_lat: float
-    date_from: str
-    date_to: str
-
-# -----------------------------------------------------------
-# HELPER: Haversine Formula for Distance/Area
-# -----------------------------------------------------------
-def calculate_pixel_area_ha(bbox, img_width=512, img_height=512):
-    """Returns the area of a single pixel in Hectares"""
+def calculate_pixel_area_ha(bbox, w=512, h=512):
     min_lon, min_lat, max_lon, max_lat = bbox
-    
-    # Radius of Earth in meters
     R = 6378137 
-    
-    # Height (Lat difference)
     lat_diff = math.radians(max_lat - min_lat)
     height_m = R * lat_diff
-    
-    # Width (Lon difference at the average latitude)
     avg_lat = math.radians((min_lat + max_lat) / 2)
-    lon_diff = math.radians(max_lon - min_lon)
-    width_m = R * lon_diff * math.cos(avg_lat)
-    
-    total_area_m2 = height_m * width_m
-    pixel_area_m2 = total_area_m2 / (img_width * img_height)
-    
-    return pixel_area_m2 / 10000.0  # Convert m2 to Hectares
-
-# -----------------------------------------------------------
-# HELPER: OpenStreetMap Infrastructure Check
-# -----------------------------------------------------------
-def check_infrastructure(bbox, burn_mask):
-    """Queries OSM for buildings/roads and checks overlap with burn mask"""
-    min_lon, min_lat, max_lon, max_lat = bbox
-    
-    # Overpass API Query (get ways + nodes so we can reconstruct full geometry)
-    overpass_url = "http://overpass-api.de/api/interpreter"
-    overpass_query = f"""
-    [out:json][timeout:25];
-    (
-      way["building"]({min_lat},{min_lon},{max_lat},{max_lon});
-      way["highway"]({min_lat},{min_lon},{max_lat},{max_lon});
-    );
-    (._;>;);
-    out body;
-    """
-
-    try:
-        response = requests.get(overpass_url, params={'data': overpass_query}, timeout=30)
-        data = response.json()
-    except Exception:
-        return {"buildings_risk": 0, "roads_risk": 0, "status": "OSM Timeout"}
-
-    elements = data.get("elements", [])
-    # Build node lookup
-    nodes = {el['id']: (el['lon'], el['lat']) for el in elements if el.get('type') == 'node'}
-
-    building_geoms = []
-    road_geoms = []
-
-    for el in elements:
-        if el.get('type') != 'way':
-            continue
-        tags = el.get('tags', {}) or {}
-        node_ids = el.get('nodes', [])
-        coords = [nodes[nid] for nid in node_ids if nid in nodes]
-        if not coords:
-            continue
-
-        if 'building' in tags:
-            # Ensure polygon closed
-            if coords[0] != coords[-1]:
-                coords.append(coords[0])
-            geom = {"type": "Polygon", "coordinates": [coords]}
-            building_geoms.append(geom)
-        elif 'highway' in tags:
-            geom = {"type": "LineString", "coordinates": coords}
-            road_geoms.append(geom)
-
-    buildings_hit = 0
-    roads_hit = 0
-
-    h, w = burn_mask.shape
-    transform = from_bounds(min_lon, min_lat, max_lon, max_lat, w, h)
-
-    try:
-        # Rasterize and test overlap per feature
-        for geom in building_geoms:
-            rast = rasterio.features.rasterize(
-                [(geom, 1)], out_shape=(h, w), transform=transform, all_touched=True, dtype='uint8'
-            )
-            if np.any((rast == 1) & (burn_mask == 1)):
-                buildings_hit += 1
-
-        for geom in road_geoms:
-            rast = rasterio.features.rasterize(
-                [(geom, 1)], out_shape=(h, w), transform=transform, all_touched=True, dtype='uint8'
-            )
-            if np.any((rast == 1) & (burn_mask == 1)):
-                roads_hit += 1
-
-        return {"buildings_risk": buildings_hit, "roads_risk": roads_hit, "status": "ok"}
-    except Exception:
-        # Fallback to zeroes to keep API stable
-        return {"buildings_risk": 0, "roads_risk": 0, "status": "Rasterization Error"}
-
-# -----------------------------------------------------------
-# HELPER: Pre-Fire Image Fetcher
-# -----------------------------------------------------------
-def get_pre_fire_image(bbox, current_date_str):
-    try:
-        curr_date = datetime.strptime(current_date_str, "%Y-%m-%d")
-        # Go back 30-60 days
-        prev_date = curr_date - timedelta(days=45)
-        prev_date_to = prev_date + timedelta(days=15)
-        
-        bands = sentinel_api.download_imagery(
-            bbox=bbox, 
-            date_from=prev_date.strftime("%Y-%m-%d"), 
-            date_to=prev_date_to.strftime("%Y-%m-%d"), 
-            max_cloud_cover=20 # Stricter for pre-fire to look nice
-        )
-        
-        if bands is None or np.max(bands) == 0:
-            return None
-            
-        rgb = np.stack([bands[2], bands[1], bands[0]], axis=-1)
-        rgb_vis = np.zeros_like(rgb)
-        for i in range(3):
-            c = rgb[:, :, i]
-            vp = c[c>0]
-            if vp.size > 0:
-                p2, p98 = np.percentile(vp, (2, 98))
-                rgb_vis[:, :, i] = np.clip((c - p2) / (p98 - p2 + 1e-8), 0, 1)
-        
-        fig = plt.figure(figsize=(5, 5))
-        plt.imshow(rgb_vis)
-        plt.axis('off')
-        return fig_to_base64(fig)
-    except:
-        return None
+    width_m = R * math.radians(max_lon - min_lon) * math.cos(avg_lat)
+    return (height_m * width_m / (w * h)) / 10000.0
 
 def filter_small_blobs(mask, min_size):
     labeled_mask, num_features = label(mask)
     if num_features == 0: return mask
     component_sizes = np.bincount(labeled_mask.ravel())
-    too_small = component_sizes < min_size
-    too_small_mask = too_small[labeled_mask]
-    mask[too_small_mask] = 0
+    mask[component_sizes[labeled_mask] < min_size] = 0
     return mask
+
+def check_infrastructure(bbox, burn_mask):
+    min_lon, min_lat, max_lon, max_lat = bbox
+    overpass_url = "http://overpass-api.de/api/interpreter"
+    query = f'[out:json][timeout:25];(way["building"]({min_lat},{min_lon},{max_lat},{max_lon});way["highway"]({min_lat},{min_lon},{max_lat},{max_lon}););(._;>;);out body;'
+    try:
+        data = requests.get(overpass_url, params={'data': query}, timeout=30).json()
+        nodes = {el['id']: (el['lon'], el['lat']) for el in data.get("elements", []) if el.get('type') == 'node'}
+        b_hits, r_hits = 0, 0
+        h, w = burn_mask.shape
+        transform = from_bounds(min_lon, min_lat, max_lon, max_lat, w, h)
+        
+        for el in [e for e in data.get("elements", []) if e.get('type') == 'way']:
+            coords = [nodes[nid] for nid in el.get('nodes', []) if nid in nodes]
+            if not coords: continue
+            tags = el.get('tags') or {}
+            geom = {"type": "Polygon", "coordinates": [coords + [coords[0]]]} if 'building' in tags else {"type": "LineString", "coordinates": coords}
+            raster = rasterio.features.rasterize([(geom, 1)], out_shape=(h, w), transform=transform)
+            if np.any((raster == 1) & (burn_mask == 1)):
+                if 'building' in tags: b_hits += 1
+                else: r_hits += 1
+        return {"buildings_risk": b_hits, "roads_risk": r_hits}
+    except: return {"buildings_risk": 0, "roads_risk": 0}
+
+# -----------------------------------------------------------
+# MAIN ENDPOINT
+# -----------------------------------------------------------
+def robust_rgb_stretch(rgb_bands):
+    str_rgb = np.zeros_like(rgb_bands)
+    for i in range(3):
+        channel = rgb_bands[:, :, i]
+        p2, p98 = np.percentile(channel[channel > 0], (2, 98)) if np.any(channel > 0) else (0, 1)
+        str_rgb[:, :, i] = np.clip((channel - p2) / (p98 - p2 + 1e-8), 0, 1)
+    return str_rgb
 
 @app.post("/predict_with_bbox")
 async def predict_with_bbox(req: BBoxRequest):
     bbox = [req.min_lon, req.min_lat, req.max_lon, req.max_lat]
-
-    # 1. Main Sentinel Download
-    try:
-        bands = sentinel_api.download_imagery(
-            bbox=bbox, date_from=req.date_from, date_to=req.date_to, max_cloud_cover=100
-        )
-    except Exception as e:
-        raise HTTPException(500, f"Sentinel Hub Error: {str(e)}")
-
-    if bands is None or bands.size == 0 or np.max(bands) == 0:
-        raise HTTPException(status_code=404, detail="No satellite data found. This may be due to: 1) Sentinel Hub credentials invalid, 2) No imagery available for this region/date range, 3) API request failed. Check server logs for details.")
-
-    # 2. Inference
-    prediction, confidence = bbox_inference_engine.predict(bands)
-    h, w = prediction.shape
-    total_pixels = prediction.size
-
-    # 3. Spectral Filtering (The Clean Logic)
-    green, nir, swir = bands[1], bands[3], bands[4]
-    with np.errstate(divide='ignore', invalid='ignore'):
-        ndwi = (green - nir) / (green + nir + 1e-8)
-        nbr = (nir - swir) / (nir + swir + 1e-8)
-
-    is_water = ndwi > 0.0
-    is_spectrally_burned = nbr < 0.10  # Strict charcoal check
-
-    burn_mask = (prediction == 1) & (confidence > 0.90) & (~is_water) & (is_spectrally_burned)
-    burn_mask = filter_small_blobs(burn_mask, min_size=50)
-    burn_mask = binary_closing(burn_mask, structure=np.ones((2, 2)))
     
+    # 1. Download Current Imagery
+    try:
+        bands = sentinel_api.download_imagery(bbox, req.date_from, req.date_to)
+    except Exception as e:
+        raise HTTPException(500, f"Satellite Fetch Error: {str(e)}")
+
+    # 2. Run Inference
+    res = bbox_inference_engine.predict(bands, bbox=bbox, date=req.date_from)
+    
+    # 3. Refine Mask logic
+    green, nir, swir = bands[1], bands[3], bands[4]
+    ndwi = (green - nir) / (green + nir + 1e-8)
+    nbr_post = (nir - swir) / (nir + swir + 1e-8)
+    burn_mask = (res['detection'] == 1) & (res['det_confidence'] > 0.90) & (ndwi <= 0.0) & (nbr_post < 0.10)
+    burn_mask = filter_small_blobs(binary_closing(burn_mask), 50)
+    
+    # 4. Analytics
     burned_pixels = int(np.sum(burn_mask))
-    burned_fraction = burned_pixels / total_pixels
-
-    # Global Safety Switch
-    if burned_fraction < 0.002:
-        burn_mask[:] = 0
-        burned_pixels = 0
-
-    # 4. NEW: Carbon & Area Calc
-    pixel_ha = calculate_pixel_area_ha(bbox, w, h)
+    pixel_ha = calculate_pixel_area_ha(bbox, w=bands.shape[2], h=bands.shape[1])
     burned_area_ha = burned_pixels * pixel_ha
-    # Est: 20-30 tonnes CO2 per hectare for savanna/forest fires
-    co2_tonnes = burned_area_ha * 25.0 
+    infra_stats = check_infrastructure(bbox, burn_mask) if burned_pixels > 0 else {"buildings_risk": 0, "roads_risk": 0}
 
-    # 5. NEW: Infrastructure Check
-    infra_stats = {"buildings_risk": 0, "roads_risk": 0}
-    if burned_pixels > 0:
-        infra_stats = check_infrastructure(bbox, burn_mask)
-
-    # 6. NEW: Pre-Fire Image
-    pre_fire_b64 = None
-    if burned_pixels > 0: # Only fetch pre-fire if there IS a fire
-        pre_fire_b64 = get_pre_fire_image(bbox, req.date_from)
-
-    # 7. Severity (Existing)
-    mask_indices = np.where(burn_mask == 1)
+    # 5. Pre-fire & Severity
+    pre_b64, sev_b64 = None, None
     sev_counts = {"high": 0, "moderate": 0, "low": 0}
-    if burned_pixels > 0:
-        burned_nbr = nbr[mask_indices]
-        sev_class = np.zeros_like(burned_nbr)
-        sev_class[burned_nbr < 0.05] = 3
-        sev_class[(burned_nbr >= 0.05) & (burned_nbr < 0.15)] = 2
-        sev_class[burned_nbr >= 0.15] = 1
-        sev_counts["high"] = float(np.sum(sev_class == 3) / burned_pixels)
-        sev_counts["moderate"] = float(np.sum(sev_class == 2) / burned_pixels)
-        sev_counts["low"] = float(np.sum(sev_class == 1) / burned_pixels)
+    
+    post_rgb_raw = np.stack([bands[2], bands[1], bands[0]], -1)
+    rgb_vis = robust_rgb_stretch(post_rgb_raw)
 
-    # 8. Visuals (Existing)
-    rgb = np.stack([bands[2], bands[1], bands[0]], axis=-1)
-    rgb_vis = np.zeros_like(rgb)
-    for i in range(3):
-        c = rgb[:, :, i]
-        vp = c[c>0]
-        if vp.size > 0:
-            p2, p98 = np.percentile(vp, (2, 98))
-            rgb_vis[:, :, i] = np.clip((c - p2) / (p98 - p2 + 1e-8), 0, 1)
+    try:
+        # Create a 30-day window to guarantee satellite data is found
+        pre_date_to = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
+        
+        pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
+        
+        pre_rgb_raw = np.stack([pre_bands[2], pre_bands[1], pre_bands[0]], -1)
+        fig_pre, ax_pre = plt.subplots(figsize=(5, 5))
+        ax_pre.imshow(robust_rgb_stretch(pre_rgb_raw))
+        ax_pre.axis('off'); pre_b64 = fig_to_base64(fig_pre)
 
-    fig_rgb = plt.figure(figsize=(5, 5))
-    plt.imshow(rgb_vis)
-    plt.axis('off')
-    rgb_b64 = fig_to_base64(fig_rgb)
+        # Re-applying the Dynamic Severity fix so you don't lose the gradient
+        pre_nbr = (pre_bands[3] - pre_bands[4]) / (pre_bands[3] + pre_bands[4] + 1e-8)
+        dnbr = pre_nbr - nbr_post
+        fig_sev, ax_sev = plt.subplots(figsize=(5, 5))
+        ax_sev.imshow(rgb_vis) # Geographic background
+        
+        severity_overlay = np.where(burn_mask == 1, dnbr, np.nan)
+        active_dnbr = dnbr[burn_mask == 1]
+        if len(active_dnbr) > 0:
+            vmin_dyn, vmax_dyn = np.percentile(active_dnbr, (5, 95))
+            if vmin_dyn == vmax_dyn: vmin_dyn, vmax_dyn = 0.1, 0.7
+        else:
+            vmin_dyn, vmax_dyn = 0.1, 0.7
+            
+        ax_sev.imshow(severity_overlay, cmap='YlOrRd', vmin=vmin_dyn, vmax=vmax_dyn)
+        ax_sev.axis('off'); sev_b64 = fig_to_base64(fig_sev)
+    except Exception as e: print(f"! Pre-fire error: {e}")
 
-    fig_overlay = plt.figure(figsize=(5, 5))
-    plt.imshow(rgb_vis)
-    overlay = np.zeros((h, w, 4))
-    overlay[burn_mask == 1] = [1, 0, 0, 0.5] 
-    plt.imshow(overlay)
-    plt.axis('off')
-    overlay_b64 = fig_to_base64(fig_overlay)
+    # 6. Post-Fire Imagery 
+    fig_rgb, ax_rgb = plt.subplots(figsize=(5, 5))
+    ax_rgb.imshow(rgb_vis); ax_rgb.axis('off'); rgb_b64 = fig_to_base64(fig_rgb)
 
-    fig_sev = plt.figure(figsize=(5, 5))
-    colors = ['#00000000', '#fde047', '#f97316', '#7f1d1d']
-    cmap_sev = ListedColormap(colors)
-    plt.imshow(np.zeros_like(burn_mask), cmap='gray', vmin=0, vmax=1)
-    display_map = np.zeros_like(nbr)
-    display_map[mask_indices] = np.nan # reset
-    # We need to reconstruct the severity class map for the whole image
-    # (Simplified for display)
-    sev_full = np.zeros((h, w))
-    sev_full[mask_indices] = sev_class
-    plt.imshow(sev_full, cmap=cmap_sev, vmin=0, vmax=3, interpolation='nearest')
-    plt.axis('off')
-    severity_b64 = fig_to_base64(fig_sev)
+    fig_det, ax_det = plt.subplots(figsize=(5, 5))
+    ax_det.imshow(rgb_vis)
+    overlay = np.zeros((*burn_mask.shape, 4))
+    overlay[burn_mask == 1] = [1, 0, 0, 0.6]
+    ax_det.imshow(overlay); ax_det.axis('off'); det_b64 = fig_to_base64(fig_det)
+
+    # 7. Spread Risk (Reverted to your raw, highly accurate logic)
+    pred_b64 = None
+    if 'prediction_risk' in res:
+        fig_p, ax_p = plt.subplots(figsize=(5, 5))
+        
+        # We explicitly show the background map here so it isn't floating in void space
+        ax_p.imshow(rgb_vis) 
+        
+        cmap = LinearSegmentedColormap.from_list("spread", ["#00000000", "#fbbf24", "#ef4444", "#7f1d1d"])
+        
+        # Use np.nan instead of 0.0 so the geography shows through the un-risky areas
+        raw_risk = res['prediction_risk']
+        risk = np.where(raw_risk > 0.60, raw_risk, np.nan)
+        
+        # Crop borders to remove U-Net padding lines
+        margin = 10
+        risk[0:margin,:], risk[-margin:,:], risk[:,0:margin], risk[:,-margin:] = np.nan, np.nan, np.nan, np.nan
+        
+        # Explicitly lock vmin and vmax so scaling doesn't blow out
+        ax_p.imshow(risk, cmap=cmap, vmin=0.60, vmax=1.0) 
+        ax_p.axis('off'); pred_b64 = fig_to_base64(fig_p)
 
     return {
-        "burned_pixels": burned_pixels,
         "burned_area_ha": round(burned_area_ha, 2),
-        "co2_tonnes": round(co2_tonnes, 2),
+        "co2_tonnes": round(burned_area_ha * 25.4, 2),
         "infrastructure": infra_stats,
         "severity_breakdown": sev_counts,
-        "rgb_base64": rgb_b64,
-        "pre_fire_base64": pre_fire_b64,
-        "overlay_base64": overlay_b64,
-        "severity_base64": severity_b64
+        "overlay_base64": det_b64, 
+        "predict_risk_base64": pred_b64,
+        "rgb_base64": rgb_b64,      
+        "pre_fire_base64": pre_b64, 
+        "severity_base64": sev_b64,
+        "status": "Success"
     }
 
 if __name__ == "__main__":
