@@ -269,6 +269,21 @@
     </div>
 </div>
 
+<!-- Add a loading overlay to improve UX during long analysis / network calls -->
+<style>
+  #loading-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);z-index:9999}
+  .spinner{width:64px;height:64px;border:8px solid #eee;border-top-color:#ff6b00;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #loading-text{color:#fff;margin-top:12px;font-family:system-ui,sans-serif}
+</style>
+
+<div id="loading-overlay" role="status" aria-live="polite" aria-hidden="true">
+  <div style="text-align:center">
+    <div class="spinner" aria-hidden="true"></div>
+    <div id="loading-text">Running analysis… Please wait.</div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
