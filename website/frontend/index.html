@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
             --font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
@@ -40,7 +40,7 @@
 
         /* Headings */
         h1 { margin: 0 0 0.5rem; font-size: 1.25rem; color: var(--accent); letter-spacing: -0.2px; font-weight: 600; line-height: 1.15; }
-        .subtitle { color: var(--muted); font-size: 0.86rem; margin-bottom: 1rem; }
+        .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; font-family: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; letter-spacing: 0.02em; }
 
         /* Controls */
         .control-group { background: var(--control-bg); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
@@ -62,30 +62,30 @@
         .metric-danger { color: #ef4444; } 
 
         /* Tabs */
-        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .tab-btn { background: #1e293b; padding: 0.5rem; flex: 1; font-size: 0.8rem; border-radius: 0.25rem; cursor: pointer; text-align: center; border: 1px solid #334155; }
-        .tab-btn:hover { background: rgba(249,115,22,0.06); border-color: rgba(249,115,22,0.08); color: #fff; }
-        .tab-btn.active { background: #f97316; border-color: #f97316; color: white; }
+        .tabs { display: flex; gap: 0.6rem; margin-bottom: 1rem; }
+        .tab-btn { background: linear-gradient(180deg, #1e293b 0%, #0f1729 100%); padding: 0.45rem 0.6rem; flex: 1; font-size: 0.75rem; font-weight: 600; border-radius: 0.5rem; cursor: pointer; text-align: center; border: 1px solid #334155; transition: all 0.2s ease; color: #cbd5e1; letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; }
+        .tab-btn:hover { background: linear-gradient(180deg, #334155 0%, #1e293b 100%); border-color: rgba(249,115,22,0.2); color: #f1f5f9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+        .tab-btn.active { background: linear-gradient(180deg, #f97316 0%, #fb923c 100%); border-color: #fb923c; color: white; box-shadow: 0 6px 20px rgba(249,115,22,0.3); transform: translateY(-2px); font-weight: 700; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
         /* Overlay Toggle Buttons */
-        .overlay-btn { background: #0b1324; color: #cbd5e1; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer; flex: 1; font-weight: 600; }
-        .overlay-btn:disabled { background: #0f172a; color: #475569; cursor: not-allowed; }
-        .overlay-btn.active { background: #f97316; border-color: #f97316; color: white; }
-        .overlay-btn:hover { background: rgba(251,146,60,0.08); color: #fff3ea; border-color: rgba(251,146,60,0.12); }
-        .overlay-control .overlay-btn { padding: 0.38rem 0.55rem; font-size: 0.85rem; }
+        .overlay-btn { background: linear-gradient(180deg, #1e293b 0%, #0f1729 100%); color: #cbd5e1; border: 1px solid #334155; padding: 0.38rem 0.55rem; border-radius: 0.5rem; cursor: pointer; flex: 1; font-weight: 600; font-size: 0.75rem; letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+        .overlay-btn:disabled { background: linear-gradient(180deg, #0f172a 0%, #0b1220 100%); color: #475569; cursor: not-allowed; box-shadow: none; }
+        .overlay-btn.active { background: linear-gradient(180deg, #f97316 0%, #fb923c 100%); border-color: #fb923c; color: white; box-shadow: 0 6px 20px rgba(249,115,22,0.3); transform: translateY(-2px); }
+        .overlay-btn:hover { background: linear-gradient(180deg, #334155 0%, #1e293b 100%); border-color: rgba(249,115,22,0.2); color: #f1f5f9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
 
         /* App Header */
-        .app-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
+        .app-header { display:flex; align-items:center; justify-content:center; gap:0.5rem; margin-bottom:0.5rem; }
+        .app-title { display:flex; flex-direction:column; align-items:center; text-align:center; }
         .app-title-img { height:28px; width:auto; display:block; margin-bottom:4px; }
         h1 { margin: 0 0 0.25rem; font-size: 1.05rem; color: #f97316; letter-spacing: -0.2px; font-weight:600; }
-        .subtitle { color: #9aa6b2; font-size: 0.8rem; margin-bottom: 0.6rem; }
+        .subtitle { color: #9aa6b2; font-size: 0.8rem; margin-bottom: 0.6rem; font-family: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; letter-spacing: 0.02em; }
 
         /* Buttons */
-        button { background: #f97316; color: white; border: none; padding: 0.62rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; width: 100%; transition: all 0.12s ease; box-shadow: 0 4px 12px rgba(249,115,22,0.08); }
-        button:hover { background: #fb923c; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(251,146,60,0.12); }
-        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; transform: none; box-shadow:none; }
+        button { background: linear-gradient(180deg, #1e293b 0%, #0f1729 100%); color: #cbd5e1; border: 1px solid #334155; padding: 0.55rem 0.8rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; width: 100%; transition: all 0.2s ease; letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 0.35rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+        button:hover { background: linear-gradient(180deg, #334155 0%, #1e293b 100%); border-color: rgba(249,115,22,0.2); color: #f1f5f9; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); }
+        button:disabled { background: linear-gradient(180deg, #0f172a 0%, #0b1220 100%); color: #475569; border-color: #1f2937; cursor: not-allowed; transform: none; box-shadow: none; }
 
         /* Metrics */
         .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
@@ -125,6 +125,16 @@
         #loader { display: none; text-align: center; margin: 2rem 0; color: #60a5fa; }
         
         .infra-item { display: flex; justify-content: space-between; padding: 0.5rem; background: #334155; margin-bottom: 0.25rem; border-radius: 0.25rem; font-size: 0.85rem; }
+
+        /* Image Popup Modal */
+        .image-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 3000; align-items: center; justify-content: center; animation: fadeIn 0.3s ease; }
+        .image-modal.active { display: flex; }
+        .image-modal-content { position: relative; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; align-items: center; }
+        .image-modal img { max-width: 100%; max-height: 85vh; border-radius: 0.75rem; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8); }
+        .image-modal-close { position: absolute; top: -40px; right: 0; background: #f97316; color: white; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s ease; }
+        .image-modal-close:hover { background: #fb923c; }
+        .sidebar .tab-content img { cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .sidebar .tab-content img:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2); }
     </style>
 </head>
 <body>
@@ -155,7 +165,10 @@
     <input type="hidden" id="minLon"><input type="hidden" id="minLat">
     <input type="hidden" id="maxLon"><input type="hidden" id="maxLat">
 
-    <button id="analyzeBtn" onclick="runAnalysis()" disabled>Draw Region on Map</button>
+    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+        <button id="analyzeBtn" onclick="runAnalysis()" disabled style="flex: 1;">Draw Region on Map</button>
+        <button id="resetBtn" onclick="resetAnalysis()" style="flex: 0 0 auto; width: auto; padding: 0.55rem 1rem;">Reset</button>
+    </div>
     <div id="loader">Running Advanced Analysis...<br><small>Querying Satellite & Infrastructure Data</small></div>
 
     <div class="results" id="resultsArea">
@@ -191,12 +204,12 @@
 
         <div id="tab-overlay" class="tab-content active">
             <label>Burn Detection Overlay</label>
-            <img id="overlayImg" src="">
+            <img id="overlayImg" src="" onclick="openImageModal(this)" alt="Burn Detection Overlay">
         </div>
 
         <div id="tab-severity" class="tab-content">
             <label>Burn Severity Index</label>
-            <img id="severityImg" src="">
+            <img id="severityImg" src="" onclick="openImageModal(this)" alt="Burn Severity Index">
             <div style="display: flex; gap: 5px; margin-top: 5px;">
                 <div style="background:#fde047; height:4px; flex:1"></div>
                 <div style="background:#f97316; height:4px; flex:1"></div>
@@ -209,14 +222,14 @@
 
         <div id="tab-compare" class="tab-content">
             <label>Pre-Fire Baseline (approx 1-2 months prior)</label>
-            <img id="preFireImg" src="" alt="Pre-fire image unavailable">
+            <img id="preFireImg" src="" alt="Pre-fire image unavailable" onclick="openImageModal(this)">
             <label>Post-Fire Result</label>
-            <img id="rgbImg" src="">
+            <img id="rgbImg" src="" onclick="openImageModal(this)" alt="Post-Fire Result">
         </div>
 
         <div id="tab-prediction" class="tab-content">
             <label>Fire Spread Risk Prediction</label>
-            <img id="predictionImg" src="" alt="Run analysis to generate prediction">
+            <img id="predictionImg" src="" alt="Run analysis to generate prediction" onclick="openImageModal(this)">
             <div style="display: flex; gap: 5px; margin-top: 5px;">
                 <div style="background:#fbbf24; height:4px; flex:1"></div>
                 <div style="background:#ef4444; height:4px; flex:1"></div>
@@ -237,6 +250,13 @@
 
 <div class="map-container">
     <div id="map"></div>
+</div>
+
+<div id="imageModal" class="image-modal">
+    <div class="image-modal-content">
+        <button class="image-modal-close" onclick="closeImageModal()">&times;</button>
+        <img id="modalImage" src="" alt="Enlarged image">
+    </div>
 </div>
 
 <div id="globalLoader" class="global-loader" role="status" aria-live="polite">
@@ -290,7 +310,7 @@
     map.addLayer(drawnItems);
     const drawControl = new L.Control.Draw({
         draw: { polygon: false, marker: false, circle: false, circlemarker: false, polyline: false, rectangle: { shapeOptions: { color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 } } },
-        edit: { featureGroup: drawnItems }
+        edit: false
     });
     map.addControl(drawControl);
 
@@ -409,6 +429,72 @@
         document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
         document.getElementById(`tab-${tabName}`).classList.add('active');
         event.target.classList.add('active');
+    }
+
+    function openImageModal(imgElement) {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        modalImg.src = imgElement.src;
+        modalImg.alt = imgElement.alt;
+        modal.classList.add('active');
+    }
+
+    function closeImageModal() {
+        const modal = document.getElementById('imageModal');
+        modal.classList.remove('active');
+    }
+
+    // Close modal when clicking on the overlay background
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('imageModal');
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeImageModal();
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeImageModal();
+            }
+        });
+    });
+
+    function resetAnalysis() {
+        // Clear drawn layers from map
+        drawnItems.clearLayers();
+        
+        // Clear overlays
+        clearOverlays();
+        
+        // Reset form fields
+        document.getElementById('minLat').value = '';
+        document.getElementById('maxLat').value = '';
+        document.getElementById('minLon').value = '';
+        document.getElementById('maxLon').value = '';
+        document.getElementById('presetSelect').value = '';
+        
+        // Reset button state
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        analyzeBtn.disabled = true;
+        analyzeBtn.innerText = 'Draw Region on Map';
+        
+        // Hide results
+        document.getElementById('resultsArea').style.display = 'none';
+        
+        // Clear images
+        document.getElementById('overlayImg').src = '';
+        document.getElementById('severityImg').src = '';
+        document.getElementById('preFireImg').src = '';
+        document.getElementById('rgbImg').src = '';
+        document.getElementById('predictionImg').src = '';
+        
+        // Reset to first tab
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-overlay').classList.add('active');
+        document.querySelector('.tab-btn').classList.add('active');
     }
 
     async function runAnalysis() {
