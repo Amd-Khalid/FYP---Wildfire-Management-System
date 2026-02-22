@@ -33,13 +33,13 @@ from model.burn_scar_inference import BurnScarInference, SentinelHubAPI
 
 # Define paths
 BASE_DIR = Path(__file__).parent.parent
-DET_WEIGHTS = BASE_DIR / "model" / "best_unet_burn_scar.pth"
-PRED_WEIGHTS = BASE_DIR / "model" / "best_unet_prediction.pth"
+DET_WEIGHTS = BASE_DIR / "model" / "best_resnet34_unet.pth" # YOUR NEW MODEL
+PRED_WEIGHTS = BASE_DIR / "model" / "best_unet_prediction.pth" # TEAMMATE'S PREDICTION MODEL
 
 app = FastAPI(title="Burn Scar & Prediction API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Initialize Engine
+# Initialize Engine with BOTH models
 bbox_inference_engine = BurnScarInference(
     detection_path=str(DET_WEIGHTS),
     prediction_path=str(PRED_WEIGHTS) if PRED_WEIGHTS.exists() else None
@@ -99,9 +99,6 @@ def check_infrastructure(bbox, burn_mask):
         return {"buildings_risk": b_hits, "roads_risk": r_hits}
     except: return {"buildings_risk": 0, "roads_risk": 0}
 
-# -----------------------------------------------------------
-# MAIN ENDPOINT
-# -----------------------------------------------------------
 def robust_rgb_stretch(rgb_bands):
     str_rgb = np.zeros_like(rgb_bands)
     for i in range(3):
@@ -110,33 +107,47 @@ def robust_rgb_stretch(rgb_bands):
         str_rgb[:, :, i] = np.clip((channel - p2) / (p98 - p2 + 1e-8), 0, 1)
     return str_rgb
 
+# -----------------------------------------------------------
+# MAIN ENDPOINT
+# -----------------------------------------------------------
 @app.post("/predict_with_bbox")
 async def predict_with_bbox(req: BBoxRequest):
     bbox = [req.min_lon, req.min_lat, req.max_lon, req.max_lat]
     
-    # 1. Download Current Imagery
+    # 1. Download Current Imagery (BOTH S2 and S1 for our new model)
     try:
-        bands = sentinel_api.download_imagery(bbox, req.date_from, req.date_to)
+        # Added max_cloud_cover=100 back to prevent black mosaic clipping
+        bands = sentinel_api.download_imagery(bbox, req.date_from, req.date_to, max_cloud_cover=100)
+        s1_bands = sentinel_api.download_s1_imagery(bbox, req.date_from, req.date_to)
     except Exception as e:
         raise HTTPException(500, f"Satellite Fetch Error: {str(e)}")
 
-    # 2. Run Inference
-    res = bbox_inference_engine.predict(bands, bbox=bbox, date=req.date_from)
+    if bands is None or bands.size == 0 or np.max(bands) == 0:
+        raise HTTPException(status_code=404, detail="No satellite data found.")
+
+    # 2. Run Inference (Passes BOTH arrays, returns dict with detection AND risk)
+    res = bbox_inference_engine.predict(bands, s1_bands, bbox=bbox, date=req.date_from)
     
-    # 3. Refine Mask logic
-    green, nir, swir = bands[1], bands[3], bands[4]
-    ndwi = (green - nir) / (green + nir + 1e-8)
-    nbr_post = (nir - swir) / (nir + swir + 1e-8)
-    burn_mask = (res['detection'] == 1) & (res['det_confidence'] > 0.90) & (ndwi <= 0.0) & (nbr_post < 0.10)
-    burn_mask = filter_small_blobs(binary_closing(burn_mask), 50)
+    # 3. Refine Mask logic (Using YOUR tuned thresholds and water masking)
+    green, nir, swir = bands[1], bands[3], bands[9]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ndwi = (green - nir) / (green + nir + 1e-8)
+        nbr_post = (nir - swir) / (nir + swir + 1e-8)
+        
+    is_water = ndwi > 0.0
+    
+    # We use 0.30 because our Focal Loss model is stricter
+    burn_mask = (res['detection'] == 1) & (res['det_confidence'] > 0.30) & (~is_water)
+    burn_mask = filter_small_blobs(binary_closing(burn_mask, structure=np.ones((2, 2))), 20)
     
     # 4. Analytics
     burned_pixels = int(np.sum(burn_mask))
     pixel_ha = calculate_pixel_area_ha(bbox, w=bands.shape[2], h=bands.shape[1])
     burned_area_ha = burned_pixels * pixel_ha
+    co2_tonnes = burned_area_ha * 25.0
     infra_stats = check_infrastructure(bbox, burn_mask) if burned_pixels > 0 else {"buildings_risk": 0, "roads_risk": 0}
 
-    # 5. Pre-fire & Severity
+    # 5. Pre-fire & Severity (TEAMMATE'S LOGIC)
     pre_b64, sev_b64 = None, None
     sev_counts = {"high": 0, "moderate": 0, "low": 0}
     
@@ -144,33 +155,40 @@ async def predict_with_bbox(req: BBoxRequest):
     rgb_vis = robust_rgb_stretch(post_rgb_raw)
 
     try:
-        # Create a 30-day window to guarantee satellite data is found
-        pre_date_to = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-        pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
-        
-        pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
-        
-        pre_rgb_raw = np.stack([pre_bands[2], pre_bands[1], pre_bands[0]], -1)
-        fig_pre, ax_pre = plt.subplots(figsize=(5, 5))
-        ax_pre.imshow(robust_rgb_stretch(pre_rgb_raw))
-        ax_pre.axis('off'); pre_b64 = fig_to_base64(fig_pre)
-
-        # Re-applying the Dynamic Severity fix so you don't lose the gradient
-        pre_nbr = (pre_bands[3] - pre_bands[4]) / (pre_bands[3] + pre_bands[4] + 1e-8)
-        dnbr = pre_nbr - nbr_post
-        fig_sev, ax_sev = plt.subplots(figsize=(5, 5))
-        ax_sev.imshow(rgb_vis) # Geographic background
-        
-        severity_overlay = np.where(burn_mask == 1, dnbr, np.nan)
-        active_dnbr = dnbr[burn_mask == 1]
-        if len(active_dnbr) > 0:
-            vmin_dyn, vmax_dyn = np.percentile(active_dnbr, (5, 95))
-            if vmin_dyn == vmax_dyn: vmin_dyn, vmax_dyn = 0.1, 0.7
-        else:
-            vmin_dyn, vmax_dyn = 0.1, 0.7
+        if burned_pixels > 0:
+            # Create a 30-day window to fetch pre-fire baseline
+            pre_date_to = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+            pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
             
-        ax_sev.imshow(severity_overlay, cmap='YlOrRd', vmin=vmin_dyn, vmax=vmax_dyn)
-        ax_sev.axis('off'); sev_b64 = fig_to_base64(fig_sev)
+            pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
+            pre_rgb_raw = np.stack([pre_bands[2], pre_bands[1], pre_bands[0]], -1)
+            
+            fig_pre, ax_pre = plt.subplots(figsize=(5, 5))
+            ax_pre.imshow(robust_rgb_stretch(pre_rgb_raw))
+            ax_pre.axis('off'); pre_b64 = fig_to_base64(fig_pre)
+
+            # Teammate's Dynamic Severity (dNBR)
+            pre_nbr = (pre_bands[3] - pre_bands[9]) / (pre_bands[3] + pre_bands[9] + 1e-8)
+            dnbr = pre_nbr - nbr_post
+            
+            fig_sev, ax_sev = plt.subplots(figsize=(5, 5))
+            ax_sev.imshow(rgb_vis) # Geographic background
+            
+            severity_overlay = np.where(burn_mask == 1, dnbr, np.nan)
+            active_dnbr = dnbr[burn_mask == 1]
+            if len(active_dnbr) > 0:
+                vmin_dyn, vmax_dyn = np.percentile(active_dnbr, (5, 95))
+                if vmin_dyn == vmax_dyn: vmin_dyn, vmax_dyn = 0.1, 0.7
+            else:
+                vmin_dyn, vmax_dyn = 0.1, 0.7
+                
+            ax_sev.imshow(severity_overlay, cmap='YlOrRd', vmin=vmin_dyn, vmax=vmax_dyn)
+            ax_sev.axis('off'); sev_b64 = fig_to_base64(fig_sev)
+            
+            # Update severity stats for frontend charts
+            sev_counts["high"] = float(np.sum((dnbr > 0.6) & (burn_mask == 1)) / burned_pixels)
+            sev_counts["moderate"] = float(np.sum((dnbr > 0.25) & (dnbr <= 0.6) & (burn_mask == 1)) / burned_pixels)
+            sev_counts["low"] = float(np.sum((dnbr <= 0.25) & (burn_mask == 1)) / burned_pixels)
     except Exception as e: print(f"! Pre-fire error: {e}")
 
     # 6. Post-Fire Imagery 
@@ -180,34 +198,29 @@ async def predict_with_bbox(req: BBoxRequest):
     fig_det, ax_det = plt.subplots(figsize=(5, 5))
     ax_det.imshow(rgb_vis)
     overlay = np.zeros((*burn_mask.shape, 4))
-    overlay[burn_mask == 1] = [1, 0, 0, 0.6]
+    overlay[burn_mask == 1] = [1, 0, 0, 0.5]
     ax_det.imshow(overlay); ax_det.axis('off'); det_b64 = fig_to_base64(fig_det)
 
-    # 7. Spread Risk (Reverted to your raw, highly accurate logic)
+    # 7. Spread Risk (TEAMMATE'S LOGIC)
     pred_b64 = None
     if 'prediction_risk' in res:
         fig_p, ax_p = plt.subplots(figsize=(5, 5))
-        
-        # We explicitly show the background map here so it isn't floating in void space
         ax_p.imshow(rgb_vis) 
         
         cmap = LinearSegmentedColormap.from_list("spread", ["#00000000", "#fbbf24", "#ef4444", "#7f1d1d"])
-        
-        # Use np.nan instead of 0.0 so the geography shows through the un-risky areas
         raw_risk = res['prediction_risk']
-        risk = np.where(raw_risk > 0.60, raw_risk, np.nan)
+        risk = np.where(raw_risk > 0.40, raw_risk, np.nan)
         
         # Crop borders to remove U-Net padding lines
         margin = 10
         risk[0:margin,:], risk[-margin:,:], risk[:,0:margin], risk[:,-margin:] = np.nan, np.nan, np.nan, np.nan
         
-        # Explicitly lock vmin and vmax so scaling doesn't blow out
         ax_p.imshow(risk, cmap=cmap, vmin=0.60, vmax=1.0) 
         ax_p.axis('off'); pred_b64 = fig_to_base64(fig_p)
 
     return {
         "burned_area_ha": round(burned_area_ha, 2),
-        "co2_tonnes": round(burned_area_ha * 25.4, 2),
+        "co2_tonnes": round(co2_tonnes, 2),
         "infrastructure": infra_stats,
         "severity_breakdown": sev_counts,
         "overlay_base64": det_b64, 
