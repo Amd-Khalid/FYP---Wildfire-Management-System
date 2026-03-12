@@ -165,9 +165,12 @@
     <input type="hidden" id="minLon"><input type="hidden" id="minLat">
     <input type="hidden" id="maxLon"><input type="hidden" id="maxLat">
 
-    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-        <button id="analyzeBtn" onclick="runAnalysis()" disabled style="flex: 1;">Draw Region on Map</button>
-        <button id="resetBtn" onclick="resetAnalysis()" style="flex: 0 0 auto; width: auto; padding: 0.55rem 1rem;">Reset</button>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+        <div style="display: flex; gap: 0.5rem;">
+            <button id="analyzeBtn" onclick="runAnalysis()" disabled style="flex: 1;">Draw Region on Map</button>
+            <button id="resetBtn" onclick="resetAnalysis()" style="flex: 0 0 auto; width: auto; padding: 0.55rem 1rem;">Reset</button>
+        </div>
+        <button id="downloadReportBtn" onclick="downloadReport()" disabled>Download Report (HTML)</button>
     </div>
     <div id="loader">Running Advanced Analysis...<br><small>Querying Satellite & Infrastructure Data</small></div>
 
@@ -494,6 +497,10 @@
         const analyzeBtn = document.getElementById('analyzeBtn');
         analyzeBtn.disabled = true;
         analyzeBtn.innerText = 'Draw Region on Map';
+        const reportBtn = document.getElementById('downloadReportBtn');
+        if (reportBtn) {
+            reportBtn.disabled = true;
+        }
         
         // Hide results
         document.getElementById('resultsArea').style.display = 'none';
@@ -588,6 +595,10 @@
             }
 
             results.style.display = 'block';
+            const reportBtn = document.getElementById('downloadReportBtn');
+            if (reportBtn) {
+                reportBtn.disabled = false;
+            }
         } catch (e) {
             // Ensure overlays are cleared on error
             clearOverlays();
@@ -596,6 +607,150 @@
             btn.disabled = false; loader.style.display = 'none'; if (globalLoader) globalLoader.style.display = 'none';
         }
     }
+
+    function downloadReport() {
+        const results = document.getElementById('resultsArea');
+        if (!results || results.style.display === 'none') {
+            alert('Please run an analysis first.');
+            return;
+        }
+
+        const presetSelect = document.getElementById('presetSelect');
+        const presetName = presetSelect && presetSelect.selectedIndex > 0
+            ? presetSelect.options[presetSelect.selectedIndex].text
+            : 'Custom Region';
+
+        const dateFrom = document.getElementById('dateFrom').value;
+        const dateTo = document.getElementById('dateTo').value;
+
+        const minLat = document.getElementById('minLat').value;
+        const maxLat = document.getElementById('maxLat').value;
+        const minLon = document.getElementById('minLon').value;
+        const maxLon = document.getElementById('maxLon').value;
+
+        const burnedArea = document.getElementById('valArea').innerText;
+        const co2Tonnes = document.getElementById('valCO2').innerText;
+        const buildingsRisk = document.getElementById('valBuildings').innerText;
+        const roadsRisk = document.getElementById('valRoads').innerText;
+
+        const overlayImg = document.getElementById('overlayImg').src || '';
+        const severityImg = document.getElementById('severityImg').src || '';
+        const preFireImg = document.getElementById('preFireImg').src || '';
+        const rgbImg = document.getElementById('rgbImg').src || '';
+        const predictionImg = document.getElementById('predictionImg').src || '';
+
+        function esc(text) {
+            return String(text || '').replace(/&/g, '&amp;')
+                                     .replace(/</g, '&lt;')
+                                     .replace(/>/g, '&gt;');
+        }
+
+        const now = new Date();
+        const generatedAt = now.toISOString();
+
+        const reportHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Wildfire Analysis Report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; background: #0f172a; color: #e5e7eb; }
+    h1, h2, h3 { color: #f97316; margin-top: 0; }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.2rem; margin-top: 1.5rem; border-bottom: 1px solid #1f2937; padding-bottom: 0.25rem; }
+    .meta { font-size: 0.85rem; color: #9ca3af; margin-bottom: 1.5rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; margin-top: 8px; }
+    .card { background: #020617; border-radius: 10px; padding: 12px 14px; border: 1px solid #1f2937; }
+    .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 4px; }
+    .value { font-size: 1.1rem; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.9rem; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid #1f2937; text-align: left; }
+    th { background: #020617; color: #d1d5db; font-weight: 600; }
+    .img-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 16px; margin-top: 8px; }
+    figure { margin: 0; background: #020617; border-radius: 10px; padding: 10px 10px 12px; border: 1px solid #1f2937; }
+    figure img { width: 100%; height: auto; border-radius: 6px; background: #020617; object-fit: contain; }
+    .img-title { font-size: 0.82rem; font-weight: 600; color: #e5e7eb; margin-bottom: 6px; }
+    .bbox { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.8rem; background: #020617; padding: 8px 10px; border-radius: 8px; border: 1px solid #1f2937; }
+    @media print {
+      body { background: #ffffff; color: #000000; }
+      .card, figure, .bbox { border-color: #e5e7eb; background: #ffffff; }
+      h1, h2, h3 { color: #000000; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Wildfire Analysis Report</h1>
+  <div class="meta">
+    Generated at: ${esc(generatedAt)}<br>
+    Application: FEWMS — Wildfire Analytics
+  </div>
+
+  <h2>Overview</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="label">Preset / Scenario</div>
+      <div class="value">${esc(presetName)}</div>
+    </div>
+    <div class="card">
+      <div class="label">Date Range</div>
+      <div class="value">${esc(dateFrom)} → ${esc(dateTo)}</div>
+    </div>
+  </div>
+
+  <h2>Bounding Box (Analysis Region)</h2>
+  <div class="bbox">
+    <div>Min Latitude: ${esc(minLat)}</div>
+    <div>Max Latitude: ${esc(maxLat)}</div>
+    <div>Min Longitude: ${esc(minLon)}</div>
+    <div>Max Longitude: ${esc(maxLon)}</div>
+  </div>
+
+  <h2>Key Metrics</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Burned Area (ha)</td><td>${esc(burnedArea)}</td></tr>
+      <tr><td>Estimated CO\u2082 Emissions (tonnes)</td><td>${esc(co2Tonnes)}</td></tr>
+      <tr><td>Buildings at Risk</td><td>${esc(buildingsRisk)}</td></tr>
+      <tr><td>Road Segments at Risk</td><td>${esc(roadsRisk)}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Imagery</h2>
+  <div class="img-grid">
+    ${overlayImg ? `<figure><div class="img-title">Burn Detection Overlay</div><img src="${overlayImg}" alt="Burn Detection Overlay"></figure>` : ''}
+    ${severityImg ? `<figure><div class="img-title">Burn Severity Index</div><img src="${severityImg}" alt="Burn Severity Index"></figure>` : ''}
+    ${preFireImg ? `<figure><div class="img-title">Pre-Fire Baseline (1–2 months prior)</div><img src="${preFireImg}" alt="Pre-Fire Baseline"></figure>` : ''}
+    ${rgbImg ? `<figure><div class="img-title">Post-Fire RGB Composite</div><img src="${rgbImg}" alt="Post-Fire RGB Composite"></figure>` : ''}
+    ${predictionImg ? `<figure><div class="img-title">Fire Spread Risk Prediction</div><img src="${predictionImg}" alt="Fire Spread Risk Prediction"></figure>` : ''}
+  </div>
+</body>
+</html>`;
+
+        const blob = new Blob([reportHtml], { type: 'text/html' });
+
+        const safePreset = presetName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Custom_Region';
+        const safeFrom = (dateFrom || '').replace(/[^0-9]/g, '') || 'start';
+        const safeTo = (dateTo || '').replace(/[^0-9]/g, '') || 'end';
+        const filename = `wildfire_report_${safePreset}_${safeFrom}_${safeTo}.html`;
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
 </script>
+</body>
+</html>
 </body>
 </html>
