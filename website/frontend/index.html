@@ -170,7 +170,7 @@
             <button id="analyzeBtn" onclick="runAnalysis()" disabled style="flex: 1;">Draw Region on Map</button>
             <button id="resetBtn" onclick="resetAnalysis()" style="flex: 0 0 auto; width: auto; padding: 0.55rem 1rem;">Reset</button>
         </div>
-        <button id="downloadReportBtn" onclick="downloadReport()" disabled>Download Report (HTML)</button>
+        <button id="downloadReportBtn" onclick="downloadReport()" disabled>Download Report</button>
     </div>
     <div id="loader">Running Advanced Analysis...<br><small>Querying Satellite & Infrastructure Data</small></div>
 
@@ -289,6 +289,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
     const API_BASE = "http://localhost:8000";
 
@@ -615,6 +616,11 @@
             return;
         }
 
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+            alert('Unable to generate PDF: PDF library failed to load. Please check your internet connection and reload the page.');
+            return;
+        }
+
         const presetSelect = document.getElementById('presetSelect');
         const presetName = presetSelect && presetSelect.selectedIndex > 0
             ? presetSelect.options[presetSelect.selectedIndex].text
@@ -639,118 +645,66 @@
         const rgbImg = document.getElementById('rgbImg').src || '';
         const predictionImg = document.getElementById('predictionImg').src || '';
 
-        function esc(text) {
-            return String(text || '').replace(/&/g, '&amp;')
-                                     .replace(/</g, '&lt;')
-                                     .replace(/>/g, '&gt;');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+        let y = 15;
+        pdf.setFontSize(18);
+        pdf.text('Wildfire Analysis Report', 105, y, { align: 'center' });
+        y += 10;
+
+        pdf.setFontSize(10);
+        pdf.text(`Preset / Scenario: ${presetName}`, 14, y);
+        y += 5;
+        pdf.text(`Date Range: ${dateFrom} → ${dateTo}`, 14, y);
+        y += 8;
+
+        pdf.text('Bounding Box (Analysis Region):', 14, y);
+        y += 5;
+        pdf.text(`Min Lat: ${minLat}`, 14, y);       y += 5;
+        pdf.text(`Max Lat: ${maxLat}`, 14, y);       y += 5;
+        pdf.text(`Min Lon: ${minLon}`, 14, y);       y += 5;
+        pdf.text(`Max Lon: ${maxLon}`, 14, y);       y += 8;
+
+        pdf.setFontSize(12);
+        pdf.text('Key Metrics', 14, y);
+        y += 6;
+        pdf.setFontSize(10);
+        pdf.text(`Burned Area (ha): ${burnedArea}`, 14, y);             y += 5;
+        pdf.text(`Estimated CO2 (tonnes): ${co2Tonnes}`, 14, y);        y += 5;
+        pdf.text(`Buildings at Risk: ${buildingsRisk}`, 14, y);         y += 5;
+        pdf.text(`Road Segments at Risk: ${roadsRisk}`, 14, y);         y += 10;
+
+        function addImageIfAny(label, dataUrl) {
+            if (!dataUrl) return;
+            if (y > 200) {
+                pdf.addPage();
+                y = 15;
+            }
+            pdf.setFontSize(12);
+            pdf.text(label, 14, y);
+            y += 4;
+            pdf.setFontSize(10);
+
+            const imgWidth = 180;
+            const imgHeight = 90;
+            pdf.addImage(dataUrl, 'PNG', 14, y, imgWidth, imgHeight);
+            y += imgHeight + 8;
         }
 
-        const now = new Date();
-        const generatedAt = now.toISOString();
-
-        const reportHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Wildfire Analysis Report</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; background: #0f172a; color: #e5e7eb; }
-    h1, h2, h3 { color: #f97316; margin-top: 0; }
-    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
-    h2 { font-size: 1.2rem; margin-top: 1.5rem; border-bottom: 1px solid #1f2937; padding-bottom: 0.25rem; }
-    .meta { font-size: 0.85rem; color: #9ca3af; margin-bottom: 1.5rem; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 12px; margin-top: 8px; }
-    .card { background: #020617; border-radius: 10px; padding: 12px 14px; border: 1px solid #1f2937; }
-    .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 4px; }
-    .value { font-size: 1.1rem; font-weight: 600; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.9rem; }
-    th, td { padding: 6px 8px; border-bottom: 1px solid #1f2937; text-align: left; }
-    th { background: #020617; color: #d1d5db; font-weight: 600; }
-    .img-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 16px; margin-top: 8px; }
-    figure { margin: 0; background: #020617; border-radius: 10px; padding: 10px 10px 12px; border: 1px solid #1f2937; }
-    figure img { width: 100%; height: auto; border-radius: 6px; background: #020617; object-fit: contain; }
-    .img-title { font-size: 0.82rem; font-weight: 600; color: #e5e7eb; margin-bottom: 6px; }
-    .bbox { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.8rem; background: #020617; padding: 8px 10px; border-radius: 8px; border: 1px solid #1f2937; }
-    @media print {
-      body { background: #ffffff; color: #000000; }
-      .card, figure, .bbox { border-color: #e5e7eb; background: #ffffff; }
-      h1, h2, h3 { color: #000000; }
-    }
-  </style>
-</head>
-<body>
-  <h1>Wildfire Analysis Report</h1>
-  <div class="meta">
-    Generated at: ${esc(generatedAt)}<br>
-    Application: FEWMS — Wildfire Analytics
-  </div>
-
-  <h2>Overview</h2>
-  <div class="grid">
-    <div class="card">
-      <div class="label">Preset / Scenario</div>
-      <div class="value">${esc(presetName)}</div>
-    </div>
-    <div class="card">
-      <div class="label">Date Range</div>
-      <div class="value">${esc(dateFrom)} → ${esc(dateTo)}</div>
-    </div>
-  </div>
-
-  <h2>Bounding Box (Analysis Region)</h2>
-  <div class="bbox">
-    <div>Min Latitude: ${esc(minLat)}</div>
-    <div>Max Latitude: ${esc(maxLat)}</div>
-    <div>Min Longitude: ${esc(minLon)}</div>
-    <div>Max Longitude: ${esc(maxLon)}</div>
-  </div>
-
-  <h2>Key Metrics</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Metric</th>
-        <th>Value</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td>Burned Area (ha)</td><td>${esc(burnedArea)}</td></tr>
-      <tr><td>Estimated CO\u2082 Emissions (tonnes)</td><td>${esc(co2Tonnes)}</td></tr>
-      <tr><td>Buildings at Risk</td><td>${esc(buildingsRisk)}</td></tr>
-      <tr><td>Road Segments at Risk</td><td>${esc(roadsRisk)}</td></tr>
-    </tbody>
-  </table>
-
-  <h2>Imagery</h2>
-  <div class="img-grid">
-    ${overlayImg ? `<figure><div class="img-title">Burn Detection Overlay</div><img src="${overlayImg}" alt="Burn Detection Overlay"></figure>` : ''}
-    ${severityImg ? `<figure><div class="img-title">Burn Severity Index</div><img src="${severityImg}" alt="Burn Severity Index"></figure>` : ''}
-    ${preFireImg ? `<figure><div class="img-title">Pre-Fire Baseline (1–2 months prior)</div><img src="${preFireImg}" alt="Pre-Fire Baseline"></figure>` : ''}
-    ${rgbImg ? `<figure><div class="img-title">Post-Fire RGB Composite</div><img src="${rgbImg}" alt="Post-Fire RGB Composite"></figure>` : ''}
-    ${predictionImg ? `<figure><div class="img-title">Fire Spread Risk Prediction</div><img src="${predictionImg}" alt="Fire Spread Risk Prediction"></figure>` : ''}
-  </div>
-</body>
-</html>`;
-
-        const blob = new Blob([reportHtml], { type: 'text/html' });
+        addImageIfAny('Burn Detection Overlay', overlayImg);
+        addImageIfAny('Burn Severity Index', severityImg);
+        addImageIfAny('Pre-Fire Baseline (1–2 months prior)', preFireImg);
+        addImageIfAny('Post-Fire RGB Composite', rgbImg);
+        addImageIfAny('Fire Spread Risk Prediction', predictionImg);
 
         const safePreset = presetName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Custom_Region';
         const safeFrom = (dateFrom || '').replace(/[^0-9]/g, '') || 'start';
         const safeTo = (dateTo || '').replace(/[^0-9]/g, '') || 'end';
-        const filename = `wildfire_report_${safePreset}_${safeFrom}_${safeTo}.html`;
+        const filename = `wildfire_report_${safePreset}_${safeFrom}_${safeTo}.pdf`;
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        pdf.save(filename);
     }
 </script>
-</body>
-</html>
 </body>
 </html>
