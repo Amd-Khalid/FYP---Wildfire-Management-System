@@ -253,6 +253,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
     const API_BASE = "http://localhost:8000";
+    let predictionLayer = null;  // ← add this line
 
     const PRESET_FIRES = [
         {
@@ -405,90 +406,71 @@
         event.target.classList.add('active');
     }
 
-    async function runAnalysis() {
-        const btn = document.getElementById('analyzeBtn');
-        const loader = document.getElementById('loader');
-        const results = document.getElementById('resultsArea');
-        const globalLoader = document.getElementById('globalLoader');
-        
-        btn.disabled = true; loader.style.display = 'block'; if (globalLoader) globalLoader.style.display = 'flex'; results.style.display = 'none';
 
-        const payload = {
-            min_lon: parseFloat(document.getElementById('minLon').value),
-            min_lat: parseFloat(document.getElementById('minLat').value),
-            max_lon: parseFloat(document.getElementById('maxLon').value),
-            max_lat: parseFloat(document.getElementById('maxLat').value),
-            date_from: document.getElementById('dateFrom').value,
-            date_to: document.getElementById('dateTo').value
+    async function runAnalysis() {
+    const btn = document.getElementById('analyzeBtn');
+    const loader = document.getElementById('loader');
+    const results = document.getElementById('resultsArea');
+
+    btn.disabled = true; loader.style.display = 'block'; results.style.display = 'none';
+
+    const payload = {
+        min_lon: parseFloat(document.getElementById('minLon').value),
+        min_lat: parseFloat(document.getElementById('minLat').value),
+        max_lon: parseFloat(document.getElementById('maxLon').value),
+        max_lat: parseFloat(document.getElementById('maxLat').value),
+        date_from: document.getElementById('dateFrom').value,
+        date_to: document.getElementById('dateTo').value
+    };
+
+    try {
+        const resp = await fetch(`${API_BASE}/predict_with_bbox`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) throw new Error(`Server error ${resp.status}: ${await resp.text()}`);
+
+        const data = await resp.json();
+
+        // Safe setter — silently skips if element doesn't exist or data is null
+        const setImg = (id, b64) => {
+            const el = document.getElementById(id);
+            if (el && b64) el.src = "data:image/png;base64," + b64;
         };
 
-        try {
-            const resp = await fetch(`${API_BASE}/predict_with_bbox`, {
-                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
-            });
-            if (!resp.ok) throw new Error(await resp.text());
-            const data = await resp.json();
+        setImg('rgbImg',      data.rgb_base64);
+        setImg('overlayImg',  data.overlay_base64);
+        setImg('severityImg', data.severity_base64);
+        setImg('predictImg',  data.predict_risk_base64);
+        setImg('preFireImg',  data.pre_fire_base64);
 
-            // Images
-            document.getElementById('rgbImg').src = "data:image/png;base64," + data.rgb_base64;
-            document.getElementById('overlayImg').src = "data:image/png;base64," + data.overlay_base64;
-            document.getElementById('severityImg').src = "data:image/png;base64," + data.severity_base64;
-            
-            if(data.pre_fire_base64) {
-                document.getElementById('preFireImg').src = "data:image/png;base64," + data.pre_fire_base64;
-            } else {
-                document.getElementById('preFireImg').alt = "No pre-fire image available";
-            }
-
-            // NEW: Apply Prediction Data
-            if(data.predict_risk_base64) {
-                document.getElementById('predictionImg').src = "data:image/png;base64," + data.predict_risk_base64;
-            } else {
-                document.getElementById('predictionImg').alt = "Prediction risk unavailable";
-            }
-
-            // Remove previous overlays and create new ones
-            const bounds = [[payload.min_lat, payload.min_lon], [payload.max_lat, payload.max_lon]];
-            clearOverlays();
-
-            const opEl = document.getElementById('overlayOpacity');
-            const opVal = opEl ? parseFloat(opEl.value) : 0.9;
-
-            // After (post-fire) overlay - always created
-            overlayAfter = L.imageOverlay("data:image/png;base64," + data.rgb_base64, bounds, {opacity: opVal});
-            document.getElementById('overlayAfterBtn').disabled = false;
-
-            // Before (pre-fire) overlay - create only if available
-            if (data.pre_fire_base64) {
-                overlayBefore = L.imageOverlay("data:image/png;base64," + data.pre_fire_base64, bounds, {opacity: opVal});
-                document.getElementById('overlayBeforeBtn').disabled = false;
-            } else {
-                document.getElementById('overlayBeforeBtn').disabled = true;
-            }
-
-            // Show the post-fire overlay by default and zoom to the selected area
-            setMapOverlay('after');
-            map.fitBounds(bounds);
-
-            // Stats
-            document.getElementById('valArea').innerText = data.burned_area_ha;
-            document.getElementById('valCO2').innerText = data.co2_tonnes;
-            
-            // Infrastructure
-            if(data.infrastructure) {
-                document.getElementById('valBuildings').innerText = data.infrastructure.buildings_risk;
-                document.getElementById('valRoads').innerText = data.infrastructure.roads_risk;
-            }
-
-            results.style.display = 'block';
-        } catch (e) {
-            // Ensure overlays are cleared on error
-            clearOverlays();
-            alert("Analysis Error: " + e.message);
-        } finally {
-            btn.disabled = false; loader.style.display = 'none'; if (globalLoader) globalLoader.style.display = 'none';
+        // Map overlay
+        const bounds = [[payload.min_lat, payload.min_lon], [payload.max_lat, payload.max_lon]];
+        if (predictionLayer) map.removeLayer(predictionLayer);
+        if (data.predict_risk_base64) {
+            predictionLayer = L.imageOverlay(
+                "data:image/png;base64," + data.predict_risk_base64,
+                bounds, { opacity: 0.65, interactive: true }
+            ).addTo(map);
         }
+
+        const valArea = document.getElementById('valArea');
+        const valCO2  = document.getElementById('valCO2');
+        if (valArea) valArea.innerText = data.burned_area_ha ?? '—';
+        if (valCO2)  valCO2.innerText  = data.co2_tonnes    ?? '—';
+
+        results.style.display = 'block';
+
+    } catch (e) {
+        alert("Analysis Error: " + e.message);
+        console.error(e);
+    } finally {
+        btn.disabled = false;
+        loader.style.display = 'none';
     }
+}
 </script>
 </body>
 </html>
