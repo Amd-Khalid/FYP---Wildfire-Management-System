@@ -155,40 +155,42 @@ async def predict_with_bbox(req: BBoxRequest):
     rgb_vis = robust_rgb_stretch(post_rgb_raw)
 
     try:
-        if burned_pixels > 0:
-            # Create a 30-day window to fetch pre-fire baseline
-            pre_date_to = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
-            pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
-            
-            pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
+        # Create a 30-day window to fetch pre-fire baseline for context imagery.
+        pre_date_to = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
+        has_pre_data = pre_bands is not None and pre_bands.size > 0 and np.max(pre_bands) > 0
+
+        if has_pre_data:
             pre_rgb_raw = np.stack([pre_bands[2], pre_bands[1], pre_bands[0]], -1)
-            
             fig_pre, ax_pre = plt.subplots(figsize=(5, 5))
             ax_pre.imshow(robust_rgb_stretch(pre_rgb_raw))
             ax_pre.axis('off'); pre_b64 = fig_to_base64(fig_pre)
 
-            # Teammate's Dynamic Severity (dNBR)
-            pre_nbr = (pre_bands[3] - pre_bands[9]) / (pre_bands[3] + pre_bands[9] + 1e-8)
-            dnbr = pre_nbr - nbr_post
-            
-            fig_sev, ax_sev = plt.subplots(figsize=(5, 5))
-            ax_sev.imshow(rgb_vis) # Geographic background
-            
-            severity_overlay = np.where(burn_mask == 1, dnbr, np.nan)
-            active_dnbr = dnbr[burn_mask == 1]
-            if len(active_dnbr) > 0:
-                vmin_dyn, vmax_dyn = np.percentile(active_dnbr, (5, 95))
-                if vmin_dyn == vmax_dyn: vmin_dyn, vmax_dyn = 0.1, 0.7
-            else:
-                vmin_dyn, vmax_dyn = 0.1, 0.7
-                
-            ax_sev.imshow(severity_overlay, cmap='YlOrRd', vmin=vmin_dyn, vmax=vmax_dyn)
-            ax_sev.axis('off'); sev_b64 = fig_to_base64(fig_sev)
-            
-            # Update severity stats for frontend charts
-            sev_counts["high"] = float(np.sum((dnbr > 0.6) & (burn_mask == 1)) / burned_pixels)
-            sev_counts["moderate"] = float(np.sum((dnbr > 0.25) & (dnbr <= 0.6) & (burn_mask == 1)) / burned_pixels)
-            sev_counts["low"] = float(np.sum((dnbr <= 0.25) & (burn_mask == 1)) / burned_pixels)
+            if burned_pixels > 0:
+                # Teammate's Dynamic Severity (dNBR)
+                pre_nbr = (pre_bands[3] - pre_bands[9]) / (pre_bands[3] + pre_bands[9] + 1e-8)
+                dnbr = pre_nbr - nbr_post
+
+                fig_sev, ax_sev = plt.subplots(figsize=(5, 5))
+                ax_sev.imshow(rgb_vis) # Geographic background
+
+                severity_overlay = np.where(burn_mask == 1, dnbr, np.nan)
+                active_dnbr = dnbr[burn_mask == 1]
+                if len(active_dnbr) > 0:
+                    vmin_dyn, vmax_dyn = np.percentile(active_dnbr, (5, 95))
+                    if vmin_dyn == vmax_dyn: vmin_dyn, vmax_dyn = 0.1, 0.7
+                else:
+                    vmin_dyn, vmax_dyn = 0.1, 0.7
+
+                ax_sev.imshow(severity_overlay, cmap='YlOrRd', vmin=vmin_dyn, vmax=vmax_dyn)
+                ax_sev.axis('off'); sev_b64 = fig_to_base64(fig_sev)
+
+                # Update severity stats for frontend charts
+                sev_counts["high"] = float(np.sum((dnbr > 0.6) & (burn_mask == 1)) / burned_pixels)
+                sev_counts["moderate"] = float(np.sum((dnbr > 0.25) & (dnbr <= 0.6) & (burn_mask == 1)) / burned_pixels)
+                sev_counts["low"] = float(np.sum((dnbr <= 0.25) & (burn_mask == 1)) / burned_pixels)
     except Exception as e: print(f"! Pre-fire error: {e}")
 
     # 6. Post-Fire Imagery 
