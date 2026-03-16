@@ -1,475 +1,1413 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>FEWMS — Wildfire Analytics</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-            --bg: #020617;
-            --panel: linear-gradient(180deg,#0b1220 0%, #0f172a 100%);
-            --text: #f8fafc;
-            --muted: #9aa6b2;
-            --control-bg: #1e293b;
-            --control-border: rgba(71,85,105,0.35);
-            --accent: #f97316;
-            --accent-amber: #fb923c;
-            --radius: 10px;
-            font-family: var(--font-family);
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            background: var(--bg);
-            color: var(--text);
-            font-size: 15px;
-            line-height: 1.45;
-        }
+<meta charset="UTF-8">
+<title>FEWMS — Wildfire Analytics Platform</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #030A14;
+  --panel:     #060E1C;
+  --panel2:    #0A1628;
+  --border:    rgba(255,100,34,0.10);
+  --border2:   rgba(255,255,255,0.05);
+  --accent:    #FF6422;
+  --accent2:   #FFB020;
+  --teal:      #22D3A0;
+  --danger:    #FF3B3B;
+  --text:      #DCE8F0;
+  --muted:     #6A7E95;
+  --dim:       #334155;
+  --font-h:    'Rajdhani', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-body: 'Source Sans 3', sans-serif;
+}
 
-        body { margin: 0; display: flex; height: 100vh; overflow: hidden; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* Sidebar */
-        .sidebar {
-            width: 380px; background: var(--panel); padding: 1.5rem; display: flex; flex-direction: column;
-            box-shadow: 6px 0 20px rgba(0,0,0,0.6); z-index: 1000; overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.03);
-        }
-        .map-container { flex-grow: 1; position: relative; }
-        #map { width: 100%; height: 100%; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
 
-        /* Headings */
-        h1 { margin: 0 0 0.5rem; font-size: 1.25rem; color: var(--accent); letter-spacing: -0.2px; font-weight: 600; line-height: 1.15; }
-        .subtitle { color: var(--muted); font-size: 0.86rem; margin-bottom: 1rem; }
+/* ─── TOP BAR ─────────────────────────────────────────── */
+.topbar {
+  height: 46px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  gap: 1rem;
+  flex-shrink: 0;
+  z-index: 2000;
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-right: 0.5rem;
+}
+.topbar-logo img { height: 22px; width: auto; }
+.topbar-logo-text {
+  font-family: var(--font-h);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+.topbar-logo-sub {
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.topbar-divider { width: 1px; height: 22px; background: var(--border2); }
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 6px var(--teal);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.topbar-coords {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-left: auto;
+  letter-spacing: 0.03em;
+}
+.topbar-clock {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  min-width: 90px;
+  text-align: right;
+}
 
-        /* Controls */
-        .control-group { background: var(--control-bg); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
-        label { display: block; font-size: 0.72rem; color: #9aa6b2; margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
-        input, select { width: 100%; background: #2d3945; border: 1px solid var(--control-border); color: var(--text); padding: 0.6rem 0.65rem; border-radius: 8px; box-sizing: border-box; font-size: 0.95rem; }
-        input::placeholder, select::placeholder { color: rgba(255,255,255,0.28); }
-        input:focus, select:focus { outline: none; box-shadow: 0 4px 18px rgba(249,115,22,0.06); border-color: rgba(249,115,22,0.18); }
-        .small-note { font-size: 0.78rem; color: #9aa6b2; }
-        
-        /* Results Section */
-        .results { display: none; animation: fadeIn 0.5s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+/* ─── MAIN LAYOUT ─────────────────────────────────────── */
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
 
-        /* Metrics Grid */
-        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
-        .metric-card { background: #1e293b; padding: 0.75rem; border-radius: 0.5rem; text-align: center; border: 1px solid #334155; }
-        .metric-val { display: block; font-size: 1.25rem; font-weight: 700; color: #f1f5f9; }
-        .metric-label { font-size: 0.7rem; color: #94a3b8; }
-        .metric-danger { color: #ef4444; } 
+/* ─── SIDEBAR ─────────────────────────────────────────── */
+.sidebar {
+  width: 360px;
+  min-width: 360px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border2);
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 100;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
 
-        /* Tabs */
-        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-        .tab-btn { background: #1e293b; padding: 0.5rem; flex: 1; font-size: 0.8rem; border-radius: 0.25rem; cursor: pointer; text-align: center; border: 1px solid #334155; }
-        .tab-btn:hover { background: rgba(249,115,22,0.06); border-color: rgba(249,115,22,0.08); color: #fff; }
-        .tab-btn.active { background: #f97316; border-color: #f97316; color: white; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+.sidebar-inner { padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; flex: 1; }
 
-        /* Overlay Toggle Buttons */
-        .overlay-btn { background: #0b1324; color: #cbd5e1; border: 1px solid #475569; padding: 0.5rem; border-radius: 0.25rem; cursor: pointer; flex: 1; font-weight: 600; }
-        .overlay-btn:disabled { background: #0f172a; color: #475569; cursor: not-allowed; }
-        .overlay-btn.active { background: #f97316; border-color: #f97316; color: white; }
-        .overlay-btn:hover { background: rgba(251,146,60,0.08); color: #fff3ea; border-color: rgba(251,146,60,0.12); }
-        .overlay-control .overlay-btn { padding: 0.38rem 0.55rem; font-size: 0.85rem; }
+/* ─── SECTION LABEL ───────────────────────────────────── */
+.section-label {
+  font-family: var(--font-h);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border2);
+}
 
-        /* App Header */
-        .app-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem; }
-        .app-title-img { height:28px; width:auto; display:block; margin-bottom:4px; }
-        h1 { margin: 0 0 0.25rem; font-size: 1.05rem; color: #f97316; letter-spacing: -0.2px; font-weight:600; }
-        .subtitle { color: #9aa6b2; font-size: 0.8rem; margin-bottom: 0.6rem; }
+/* ─── CONTROL CARD ────────────────────────────────────── */
+.card {
+  background: var(--panel2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+.card + .card { margin-top: 0; }
 
-        /* Buttons */
-        button { background: #f97316; color: white; border: none; padding: 0.62rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; width: 100%; transition: all 0.12s ease; box-shadow: 0 4px 12px rgba(249,115,22,0.08); }
-        button:hover { background: #fb923c; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(251,146,60,0.12); }
-        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; transform: none; box-shadow:none; }
+.field-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.35rem;
+  display: block;
+}
 
-        /* Metrics */
-        .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
-        .metric-card { background: linear-gradient(180deg,#0f172a 0%, #091022 100%); padding: 0.9rem; border-radius: 0.75rem; display:flex; flex-direction:column; align-items:flex-start; gap:0.25rem; border: 1px solid rgba(255,255,255,0.04); }
-        .metric-top { display:flex; width:100%; justify-content:space-between; align-items:center; }
-        .metric-val { display: block; font-size: 1.5rem; font-weight: 700; color: #f1f5f9; }
-        .metric-label { font-size: 0.72rem; color: #94a3b8; }
+input[type="date"], select {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-appearance: none;
+}
+input[type="date"]:focus, select:focus {
+  outline: none;
+  border-color: rgba(255, 100, 34, 0.35);
+  box-shadow: 0 0 0 3px rgba(255, 100, 34, 0.08);
+}
+select option { background: #0f1c2e; color: var(--text); }
 
-        /* Global Loader Overlay */
-        .global-loader { position: fixed; top:0; left:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; background: rgba(2,6,23,0.6); z-index: 2000; }
-        .global-loader .panel { background: #0f172a; padding: 1rem 1.25rem; border-radius: 0.5rem; display:flex; gap:0.75rem; align-items:center; box-shadow: 0 10px 30px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.04); }
-        .spinner { width: 28px; height: 28px; border-radius:50%; border:4px solid rgba(255,255,255,0.12); border-top-color: #fb923c; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+.date-row { display: flex; gap: 0.5rem; }
+.date-row input { flex: 1; }
 
-        /* Overlay Opacity Slider */
-        .overlay-slider { width:96px; -webkit-appearance:none; appearance:none; background: transparent; height: 8px; }
-        .overlay-slider:focus { outline: none; }
-        .overlay-slider::-webkit-slider-runnable-track { height: 8px; background: rgba(249,115,22,0.14); border-radius: 6px; }
-        .overlay-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #f97316; box-shadow: 0 2px 6px rgba(249,115,22,0.25); margin-top: -3px; border: 2px solid rgba(255,255,255,0.06); }
-        .overlay-slider::-moz-range-track { height: 8px; background: rgba(249,115,22,0.14); border-radius: 6px; }
-        .overlay-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #f97316; border: 2px solid rgba(255,255,255,0.06); box-shadow: 0 2px 6px rgba(249,115,22,0.25); }
-        .overlay-slider::-ms-track { height: 8px; background: transparent; border-color: transparent; color: transparent; }
-        .overlay-slider::-ms-fill-lower { background: rgba(249,115,22,0.14); border-radius:6px; }
-        .overlay-slider::-ms-fill-upper { background: rgba(249,115,22,0.14); border-radius:6px; }
+/* ─── PRESET FIRE CARDS ───────────────────────────────── */
+.preset-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.preset-item:hover {
+  background: rgba(255,100,34,0.06);
+  border-color: rgba(255,100,34,0.2);
+}
+.preset-item.active {
+  background: rgba(255,100,34,0.10);
+  border-color: rgba(255,100,34,0.35);
+}
+.preset-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.preset-name {
+  font-family: var(--font-h);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+}
+.preset-meta {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
 
-        /* Slight hover for the rectangle to improve affordance */
-        .leaflet-interactive:hover { filter: drop-shadow(0 0 4px rgba(255,255,255,0.08)); }
+/* ─── ANALYZE BUTTON ──────────────────────────────────── */
+.analyze-btn {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font-h);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.analyze-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%);
+  pointer-events: none;
+}
+.analyze-btn:hover:not(:disabled) {
+  background: #FF7A3A;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(255,100,34,0.35);
+}
+.analyze-btn:disabled {
+  background: #1e2d42;
+  color: var(--muted);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
-        /* Powered-by logo small override */
-        .powered-by img { width: auto; height: 20px; border-radius: 0; border: none; margin: 0; opacity: 0.95; filter: none; }
+/* ─── METRICS ─────────────────────────────────────────── */
+.metrics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.metric-card {
+  background: var(--panel2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 0.75rem;
+  position: relative;
+  overflow: hidden;
+}
+.metric-card::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.4;
+}
+.metric-card.danger::before { background: var(--danger); }
+.metric-card.warn::before { background: var(--accent2); }
+.metric-card.good::before { background: var(--teal); }
 
-        /* Small layout polish */
-        .sidebar { font-size: 14px; }
+.metric-val {
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.metric-val.danger { color: #FF7070; }
+.metric-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
 
-        .tab-content img { width: 100%; border-radius: 0.5rem; border: 1px solid #475569; margin-bottom: 0.5rem; }
-        
-        #loader { display: none; text-align: center; margin: 2rem 0; color: #60a5fa; }
-        
-        .infra-item { display: flex; justify-content: space-between; padding: 0.5rem; background: #334155; margin-bottom: 0.25rem; border-radius: 0.25rem; font-size: 0.85rem; }
-    </style>
+/* ─── INFRA ITEMS ─────────────────────────────────────── */
+.infra-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 0.3rem;
+}
+.infra-row:last-child { margin-bottom: 0; }
+.infra-name { font-size: 0.8rem; color: var(--text); }
+.infra-count {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--danger);
+  padding: 0.15rem 0.5rem;
+  background: rgba(255,59,59,0.1);
+  border-radius: 4px;
+}
+.infra-count.roads { color: var(--accent2); background: rgba(255,176,32,0.1); }
+
+/* ─── TABS ────────────────────────────────────────────── */
+.tabs-bar {
+  display: flex;
+  gap: 0.25rem;
+  background: rgba(0,0,0,0.2);
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+}
+.tab-btn {
+  flex: 1;
+  padding: 0.45rem 0.3rem;
+  font-family: var(--font-h);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: auto;
+  text-align: center;
+}
+.tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.tab-btn.active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgba(255,100,34,0.3);
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.tab-img {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  display: block;
+}
+.colorbar {
+  display: flex;
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+.colorbar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 0.3rem;
+  letter-spacing: 0.03em;
+}
+
+/* ─── 3D TERRAIN BUTTON ───────────────────────────────── */
+.terrain-btn {
+  width: 100%;
+  padding: 0.65rem;
+  background: rgba(34,211,160,0.08);
+  color: var(--teal);
+  border: 1px solid rgba(34,211,160,0.25);
+  border-radius: 8px;
+  font-family: var(--font-h);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.terrain-btn:hover:not(:disabled) {
+  background: rgba(34,211,160,0.14);
+  border-color: rgba(34,211,160,0.45);
+  box-shadow: 0 4px 16px rgba(34,211,160,0.15);
+}
+.terrain-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.terrain-icon { font-size: 1rem; }
+
+/* ─── RESULTS SECTION ─────────────────────────────────── */
+#resultsArea { display: none; animation: fadeUp 0.4s ease; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* ─── FOOTER ──────────────────────────────────────────── */
+.sidebar-footer {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+.sidebar-footer img { height: 18px; width: auto; opacity: 0.8; }
+.sidebar-footer span { font-size: 0.7rem; color: var(--muted); }
+
+/* ─── MAP AREA ────────────────────────────────────────── */
+.map-wrap { flex: 1; position: relative; }
+#map { width: 100%; height: 100%; }
+
+/* Map coordinate readout */
+.map-coords-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 26px;
+  background: rgba(6,14,28,0.85);
+  border-top: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  gap: 1rem;
+  z-index: 500;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* ─── LOADING OVERLAY ─────────────────────────────────── */
+.loader-overlay {
+  position: fixed; inset: 0;
+  background: rgba(3,10,20,0.75);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+}
+.loader-panel {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem 2rem;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.loader-ring {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,100,34,0.15);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-title {
+  font-family: var(--font-h);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+.loader-stages { display: flex; flex-direction: column; gap: 0.35rem; min-width: 220px; }
+.stage-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  transition: color 0.3s;
+}
+.stage-item.done { color: var(--teal); }
+.stage-item.active { color: var(--text); }
+.stage-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--dim);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.stage-item.done .stage-dot { background: var(--teal); }
+.stage-item.active .stage-dot { background: var(--accent); animation: pulse-dot 0.8s infinite; }
+
+/* ─── 3D TERRAIN MODAL ────────────────────────────────── */
+.terrain-modal {
+  position: fixed; inset: 0;
+  background: rgba(3,10,20,0.88);
+  backdrop-filter: blur(6px);
+  display: none;
+  flex-direction: column;
+  z-index: 6000;
+  animation: fadeUp 0.3s ease;
+}
+.terrain-topbar {
+  height: 48px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border2);
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+.terrain-title {
+  font-family: var(--font-h);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--teal);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.terrain-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.t-btn {
+  padding: 0.35rem 0.8rem;
+  font-family: var(--font-h);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid var(--border2);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  transition: all 0.15s;
+}
+.t-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
+.t-btn.active { background: rgba(255,100,34,0.15); border-color: rgba(255,100,34,0.4); color: var(--accent); }
+.close-terrain-btn {
+  padding: 0.35rem 0.8rem;
+  font-family: var(--font-h);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid rgba(255,59,59,0.3);
+  background: rgba(255,59,59,0.08);
+  color: #FF7070;
+  transition: all 0.15s;
+}
+.close-terrain-btn:hover { background: rgba(255,59,59,0.16); border-color: rgba(255,59,59,0.5); }
+.terrain-body {
+  flex: 1;
+  display: flex;
+  position: relative;
+}
+#terrainCanvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  cursor: grab;
+}
+#terrainCanvas:active { cursor: grabbing; }
+.terrain-hint {
+  position: absolute;
+  bottom: 1rem; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(6,14,28,0.8);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.terrain-loading {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--bg);
+}
+.terrain-loading-text {
+  font-family: var(--font-h);
+  font-size: 0.9rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+/* ─── MAP OVERLAY CONTROL ─────────────────────────────── */
+.map-overlay-control {
+  background: rgba(6,14,28,0.9) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 8px !important;
+  padding: 6px !important;
+  display: flex !important;
+  gap: 6px !important;
+  align-items: center !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important;
+}
+.ov-btn {
+  padding: 0.3rem 0.65rem;
+  font-family: var(--font-h);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.05);
+  color: var(--muted);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ov-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.ov-btn:hover:not(:disabled) { background: rgba(255,255,255,0.09); color: var(--text); }
+.ov-btn.active { background: rgba(255,100,34,0.18); border-color: rgba(255,100,34,0.45); color: var(--accent); }
+.ov-slider {
+  -webkit-appearance: none;
+  width: 80px; height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  outline: none;
+}
+.ov-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+/* ─── MISC ────────────────────────────────────────────── */
+.gap05 { gap: 0.5rem; }
+.hidden { display: none !important; }
+</style>
 </head>
 <body>
 
-<div class="sidebar">
-    <div class="app-header">
-        <div class="app-title">
-            <img src="fewms.png" alt="FEWMS" class="app-title-img">
-            <div class="subtitle">FarmEvo Wildfire Management System</div>
-        </div>
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <img src="fewms.png" alt="FEWMS" onerror="this.style.display='none'">
+    <div>
+      <div class="topbar-logo-text">FEWMS</div>
+      <div class="topbar-logo-sub">Wildfire Analytics</div>
     </div>
+  </div>
+  <div class="topbar-divider"></div>
+  <div class="status-pill"><div class="status-dot"></div>System Online</div>
+  <div class="status-pill" id="modelStatus"><div class="status-dot" style="background:#FFB020;box-shadow:0 0 6px #FFB020"></div>Awaiting Region</div>
+  <div class="topbar-coords" id="topbarCoords">Hover map for coordinates</div>
+  <div class="topbar-clock" id="topbarClock">--:--:-- UTC</div>
+</div>
 
-    <div class="control-group">
-        <label>Date Range</label>
-        <div style="display: flex; gap: 0.5rem;">
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-inner">
+
+      <!-- CONTROLS -->
+      <div>
+        <div class="section-label">Analysis Parameters</div>
+        <div class="card">
+          <label class="field-label">Date Range</label>
+          <div class="date-row">
             <input type="date" id="dateFrom" value="2023-08-08">
             <input type="date" id="dateTo" value="2023-08-15">
+          </div>
         </div>
+      </div>
+
+      <!-- PRESET FIRES -->
+      <div>
+        <div class="section-label">Historical Case Library</div>
+        <div class="preset-list" id="presetList"></div>
+      </div>
+
+      <input type="hidden" id="minLon">
+      <input type="hidden" id="minLat">
+      <input type="hidden" id="maxLon">
+      <input type="hidden" id="maxLat">
+
+      <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()" disabled>
+        Draw Region on Map to Begin
+      </button>
+
+      <!-- RESULTS -->
+      <div id="resultsArea">
+
+        <div class="section-label">Damage Assessment</div>
+        <div class="metrics-row">
+          <div class="metric-card danger">
+            <div class="metric-val danger" id="valArea">—</div>
+            <div class="metric-label">Hectares Burned</div>
+          </div>
+          <div class="metric-card warn">
+            <div class="metric-val" id="valCO2">—</div>
+            <div class="metric-label">CO₂ Est. (Tonnes)</div>
+          </div>
+        </div>
+        <div class="metrics-row" style="margin-top:0.5rem;">
+          <div class="metric-card">
+            <div class="metric-val" id="valPerim">—</div>
+            <div class="metric-label">Perimeter Est. (km)</div>
+          </div>
+          <div class="metric-card good">
+            <div class="metric-val" id="valConf">—</div>
+            <div class="metric-label">Detect Confidence</div>
+          </div>
+        </div>
+
+        <div style="margin-top:0.75rem;">
+          <div class="section-label">Infrastructure at Risk</div>
+          <div class="infra-row">
+            <span class="infra-name">🏢 Buildings Affected</span>
+            <span class="infra-count" id="valBuildings">0</span>
+          </div>
+          <div class="infra-row">
+            <span class="infra-name">🛣️ Road Segments</span>
+            <span class="infra-count roads" id="valRoads">0</span>
+          </div>
+        </div>
+
+        <!-- TABS -->
+        <div style="margin-top:0.75rem;">
+          <div class="section-label">Imagery Analysis</div>
+          <div class="tabs-bar">
+            <button class="tab-btn active" onclick="switchTab('overlay',this)">Overlay</button>
+            <button class="tab-btn" onclick="switchTab('severity',this)">Severity</button>
+            <button class="tab-btn" onclick="switchTab('compare',this)">Before/After</button>
+            <button class="tab-btn" onclick="switchTab('prediction',this)">Spread</button>
+          </div>
+
+          <div id="tab-overlay" class="tab-content active" style="margin-top:0.5rem;">
+            <img id="overlayImg" class="tab-img" src="" alt="">
+          </div>
+
+          <div id="tab-severity" class="tab-content" style="margin-top:0.5rem;">
+            <img id="severityImg" class="tab-img" src="" alt="">
+            <div class="colorbar" style="margin-top:0.5rem;">
+              <div style="flex:1;background:#fde047;"></div>
+              <div style="flex:1;background:#f97316;"></div>
+              <div style="flex:1;background:#b91c1c;"></div>
+              <div style="flex:1;background:#450a0a;"></div>
+            </div>
+            <div class="colorbar-label"><span>Low</span><span>Moderate</span><span>High</span><span>Severe</span></div>
+          </div>
+
+          <div id="tab-compare" class="tab-content" style="margin-top:0.5rem;">
+            <div class="field-label" style="margin-bottom:0.35rem;">Pre-Fire (30 days prior)</div>
+            <img id="preFireImg" class="tab-img" src="" alt="Pre-fire image unavailable">
+            <div class="field-label" style="margin-top:0.6rem;margin-bottom:0.35rem;">Post-Fire</div>
+            <img id="rgbImg" class="tab-img" src="" alt="">
+          </div>
+
+          <div id="tab-prediction" class="tab-content" style="margin-top:0.5rem;">
+            <div class="section-label" style="margin-bottom:0.5rem;">Fire Spread Risk Prediction</div>
+            <img id="predictImg" class="tab-img" src="" alt="Run analysis to generate prediction">
+            <div class="colorbar" style="margin-top:0.5rem;">
+              <div style="flex:1;background:#fbbf24;"></div>
+              <div style="flex:1;background:#f97316;"></div>
+              <div style="flex:1;background:#ef4444;"></div>
+              <div style="flex:1;background:#7f1d1d;"></div>
+            </div>
+            <div class="colorbar-label"><span>Moderate</span><span>High</span><span>Severe</span></div>
+          </div>
+        </div>
+
+        <!-- 3D TERRAIN BUTTON -->
+        <div style="margin-top:0.75rem;">
+          <div class="section-label">3D Analysis</div>
+          <button class="terrain-btn" id="terrain3dBtn" onclick="open3DTerrain()" disabled>
+            <span class="terrain-icon">⛰️</span>
+            Launch 3D Terrain Viewer
+          </button>
+          <div style="font-size:0.68rem;color:var(--muted);margin-top:0.4rem;line-height:1.5;">
+            Interactive elevation model with fire overlay and orbit controls.
+          </div>
+        </div>
+
+      </div><!-- end resultsArea -->
+
+    </div><!-- sidebar-inner -->
+
+    <!-- FOOTER -->
+    <div class="sidebar-footer">
+      <span style="font-size:0.7rem;color:var(--muted);">Powered by</span>
+      <img src="logo.png" alt="" onerror="this.style.display='none'">
+      <span style="font-size:0.68rem;color:var(--muted);margin-left:auto;">Sentinel-2 · Open-Meteo · OSM</span>
     </div>
-    
-    <div class="control-group">
-        <label>Preset Fires</label>
-        <select id="presetSelect" style="width:100%; padding:0.5rem; background:#334155; color:white; border-radius:0.25rem; border:1px solid #475569;">
-            <option value="">Select a preset fire</option>
-        </select>
-    </div>
-    
-    <input type="hidden" id="minLon"><input type="hidden" id="minLat">
-    <input type="hidden" id="maxLon"><input type="hidden" id="maxLat">
+  </div><!-- .sidebar -->
 
-    <button id="analyzeBtn" onclick="runAnalysis()" disabled>Draw Region on Map</button>
-    <div id="loader">Running Advanced Analysis...<br><small>Querying Satellite & Infrastructure Data</small></div>
-
-    <div class="results" id="resultsArea">
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <span class="metric-val metric-danger" id="valArea">0</span>
-                <span class="metric-label">Hectares Burned</span>
-            </div>
-            <div class="metric-card">
-                <span class="metric-val" id="valCO2">0</span>
-                <span class="metric-label">Est. CO2 (Tonnes)</span>
-            </div>
-        </div>
-
-        <div class="control-group">
-            <label>Infrastructure at Risk</label>
-            <div class="infra-item">
-                <span>Buildings Affected</span>
-                <strong id="valBuildings" style="color: #fca5a5">0</strong>
-            </div>
-            <div class="infra-item">
-                <span>Road Segments</span>
-                <strong id="valRoads" style="color: #fdba74">0</strong>
-            </div>
-        </div>
-
-        <div class="tabs">
-            <div class="tab-btn active" onclick="switchTab('overlay')">Map Overlay</div>
-            <div class="tab-btn" onclick="switchTab('severity')">Severity</div>
-            <div class="tab-btn" onclick="switchTab('compare')">Before/After</div>
-            <div class="tab-btn" onclick="switchTab('prediction')">Spread Risk</div>
-        </div>
-
-        <div id="tab-overlay" class="tab-content active">
-            <label>Burn Detection Overlay</label>
-            <img id="overlayImg" src="">
-        </div>
-
-        <div id="tab-severity" class="tab-content">
-            <label>Burn Severity Index</label>
-            <img id="severityImg" src="">
-            <div style="display: flex; gap: 5px; margin-top: 5px;">
-                <div style="background:#fde047; height:4px; flex:1"></div>
-                <div style="background:#f97316; height:4px; flex:1"></div>
-                <div style="background:#7f1d1d; height:4px; flex:1"></div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8;">
-                <span>Low</span><span>Moderate</span><span>High</span>
-            </div>
-        </div>
-
-        <div id="tab-compare" class="tab-content">
-            <label>Pre-Fire Baseline (approx 1-2 months prior)</label>
-            <img id="preFireImg" src="" alt="Pre-fire image unavailable">
-            <label>Post-Fire Result</label>
-            <img id="rgbImg" src="">
-        </div>
-
-        <div id="tab-prediction" class="tab-content">
-            <label>Fire Spread Risk Prediction</label>
-            <img id="predictionImg" src="" alt="Run analysis to generate prediction">
-            <div style="display: flex; gap: 5px; margin-top: 5px;">
-                <div style="background:#fbbf24; height:4px; flex:1"></div>
-                <div style="background:#ef4444; height:4px; flex:1"></div>
-                <div style="background:#7f1d1d; height:4px; flex:1"></div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8;">
-                <span>Moderate Risk</span><span>High Risk</span><span>Severe Risk</span>
-            </div>
-        </div>
-    </div>
-        <div style="margin-top:auto; padding-top:1rem; border-top:1px solid rgba(255,255,255,0.03);">
-            <div class="powered-by" style="display:flex; align-items:center; gap:0.6rem; margin-top:0.4rem;">
-                <span style="font-size:0.82rem; color:#9aa6b2;">Powered by</span>
-                <img src="logo.png" alt="Partner logo" style="height:20px; width:auto; opacity:0.95; filter:grayscale(0.05);">
-            </div>
-        </div>
-</div>
-
-<div class="map-container">
+  <!-- MAP -->
+  <div class="map-wrap">
     <div id="map"></div>
+    <div class="map-coords-bar">
+      <span id="mapCoordsDisplay">Move cursor over map</span>
+    </div>
+  </div>
+
+</div><!-- .main-layout -->
+
+<!-- LOADING OVERLAY -->
+<div class="loader-overlay" id="loaderOverlay">
+  <div class="loader-panel">
+    <div class="loader-ring"></div>
+    <div class="loader-title">Running Analysis</div>
+    <div class="loader-stages">
+      <div class="stage-item" id="stage1"><div class="stage-dot"></div>Fetching Sentinel-2 imagery</div>
+      <div class="stage-item" id="stage2"><div class="stage-dot"></div>Running burn scar detection</div>
+      <div class="stage-item" id="stage3"><div class="stage-dot"></div>Querying infrastructure data</div>
+      <div class="stage-item" id="stage4"><div class="stage-dot"></div>Generating spread prediction</div>
+      <div class="stage-item" id="stage5"><div class="stage-dot"></div>Rendering visualisations</div>
+    </div>
+  </div>
 </div>
 
-<div id="globalLoader" class="global-loader" role="status" aria-live="polite">
-    <div class="panel">
-        <div class="spinner" aria-hidden="true"></div>
-        <div style="color:#cbd5e1; font-size:0.95rem;">
-            <div style="font-weight:700;">Running Analysis</div>
-            <div style="font-size:0.82rem; color:#94a3b8;">Querying satellite and infrastructure datasets…</div>
-        </div>
+<!-- 3D TERRAIN MODAL -->
+<div class="terrain-modal" id="terrainModal">
+  <div class="terrain-topbar">
+    <div class="terrain-title">⛰ 3D Terrain Viewer</div>
+    <div class="terrain-controls">
+      <button class="t-btn active" id="texSatBtn" onclick="setTerrainTexture('sat')">Satellite</button>
+      <button class="t-btn" id="texFireBtn" onclick="setTerrainTexture('fire')">Fire Overlay</button>
+      <button class="t-btn" id="texSpreadBtn" onclick="setTerrainTexture('spread')">Spread Risk</button>
+      <div style="width:1px;height:20px;background:var(--border2);"></div>
+      <button class="t-btn" id="autoRotBtn" onclick="toggleAutoRotate()">Auto-Rotate</button>
+      <button class="close-terrain-btn" onclick="close3DTerrain()">✕ Close</button>
     </div>
+  </div>
+  <div class="terrain-body">
+    <div class="terrain-loading" id="terrainLoading">
+      <div class="loader-ring"></div>
+      <div class="terrain-loading-text">Fetching elevation data…</div>
+    </div>
+    <canvas id="terrainCanvas"></canvas>
+    <div class="terrain-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script>
-    const API_BASE = "http://localhost:8000";
-    let predictionLayer = null;  // ← add this line
+const API_BASE = "http://localhost:8000";
 
-    const PRESET_FIRES = [
-        {
-        "name": "Glass Fire 2020 (California)",
-        "bbox": [-122.58, 38.54, -122.50, 38.62],
-        "date_from": "2020-10-10",
-        "date_to": "2020-10-20"
-    },
-    {
-        "name": "Creek Fire 2020 (California)",
-        "bbox": [-119.35, 37.05, -119.25, 37.15],
-        "date_from": "2020-10-01",
-        "date_to": "2020-10-31"
-    },
-    {
-    "name": "January 2025 LA Fires (Palisades/Eaton Complex)",
-    "bbox": [-118.65, 34.00, -118.35, 34.20],  // West LA / Palisades–SF Valley interface
-    "date_from": "2024-12-04",
-    "date_to": "2025-01-05"
-    }
-    ];
+// ─── State ──────────────────────────────────────────────
+let predictionLayer = null;
+let overlayBefore   = null;
+let overlayAfter    = null;
+let lastData        = null;
+let lastPayload     = null;
+let activePreset    = null;
 
-    const map = L.map('map').setView([20.88, -156.68], 11); // Maui Default
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+// Three.js terrain state
+let terrainScene, terrainCamera, terrainRenderer, terrainMesh;
+let terrainAnimId   = null;
+let autoRotate      = false;
+let isDragging      = false;
+let isRightDrag     = false;
+let prevMouse       = {x:0, y:0};
+let panOffset       = {x:0, y:0};
+let spherical       = {theta: Math.PI*0.35, phi: Math.PI*0.32, radius: 14};
+let terrainTextures = {};
+let currentTexture  = 'sat';
 
-    const drawnItems = new L.FeatureGroup();
-    map.addLayer(drawnItems);
-    const drawControl = new L.Control.Draw({
-        draw: { polygon: false, marker: false, circle: false, circlemarker: false, polyline: false, rectangle: { shapeOptions: { color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 } } },
-        edit: { featureGroup: drawnItems }
+// ─── Clock ──────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const hh = String(now.getUTCHours()).padStart(2,'0');
+  const mm = String(now.getUTCMinutes()).padStart(2,'0');
+  const ss = String(now.getUTCSeconds()).padStart(2,'0');
+  document.getElementById('topbarClock').textContent = `${hh}:${mm}:${ss} UTC`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Preset fires ────────────────────────────────────────
+const PRESET_FIRES = [
+  { name:"Lahaina Fire 2023", loc:"Maui, Hawaii",    bbox:[-156.72,20.84,-156.64,20.92], date_from:"2023-08-08", date_to:"2023-08-15" },
+  { name:"Glass Fire 2020",   loc:"Napa, California", bbox:[-122.58,38.54,-122.50,38.62], date_from:"2020-10-10", date_to:"2020-10-20" },
+  { name:"Creek Fire 2020",   loc:"Fresno, California",bbox:[-119.35,37.05,-119.25,37.15], date_from:"2020-10-01", date_to:"2020-10-31" },
+  { name:"Palisades Fire 2025",loc:"Los Angeles, CA", bbox:[-118.65,34.00,-118.35,34.20], date_from:"2024-12-04", date_to:"2025-01-05" },
+];
+
+window.addEventListener('load', () => {
+  const list = document.getElementById('presetList');
+  PRESET_FIRES.forEach((f, i) => {
+    const el = document.createElement('div');
+    el.className = 'preset-item';
+    el.dataset.index = i;
+    el.innerHTML = `<div class="preset-dot"></div>
+      <div>
+        <div class="preset-name">${f.name}</div>
+        <div class="preset-meta">${f.loc} · ${f.date_from}</div>
+      </div>`;
+    el.addEventListener('click', () => selectPreset(i, el));
+    list.appendChild(el);
+  });
+});
+
+async function selectPreset(i, el) {
+  document.querySelectorAll('.preset-item').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  activePreset = i;
+  const f = PRESET_FIRES[i];
+  document.getElementById('dateFrom').value = f.date_from;
+  document.getElementById('dateTo').value   = f.date_to;
+  const bounds = [[f.bbox[1],f.bbox[0]],[f.bbox[3],f.bbox[2]]];
+  drawnItems.clearLayers();
+  const rect = L.rectangle(bounds, {color:'#FF6422',weight:2,opacity:0.9,fill:true,fillColor:'rgba(255,100,34,0.06)',fillOpacity:0.06});
+  drawnItems.addLayer(rect);
+  map.fitBounds(bounds);
+  updateCoords(rect.getBounds());
+  await runAnalysis();
+}
+
+// ─── MAP ────────────────────────────────────────────────
+const map = L.map('map', {zoomControl:true}).setView([20.88,-156.68],11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution:'© OpenStreetMap contributors © CARTO', maxZoom:19
+}).addTo(map);
+
+const drawnItems = new L.FeatureGroup().addTo(map);
+const drawControl = new L.Control.Draw({
+  draw:{
+    polygon:false, marker:false, circle:false, circlemarker:false, polyline:false,
+    rectangle:{shapeOptions:{color:'#FF6422',weight:2,opacity:0.9,fill:true,fillColor:'rgba(255,100,34,0.06)',fillOpacity:0.06}}
+  },
+  edit:{featureGroup:drawnItems}
+});
+map.addControl(drawControl);
+
+map.on(L.Draw.Event.CREATED, e => {
+  drawnItems.clearLayers();
+  if (typeof e.layer.setStyle==='function') {
+    e.layer.setStyle({color:'#FF6422',weight:2,opacity:0.9,fill:true,fillColor:'rgba(255,100,34,0.06)',fillOpacity:0.06});
+  }
+  drawnItems.addLayer(e.layer);
+  updateCoords(e.layer.getBounds());
+});
+
+map.on('mousemove', e => {
+  const lat = e.latlng.lat.toFixed(5);
+  const lng = e.latlng.lng.toFixed(5);
+  document.getElementById('mapCoordsDisplay').textContent = `Lat ${lat}  ·  Lon ${lng}`;
+  document.getElementById('topbarCoords').textContent = `${lat}, ${lng}`;
+});
+
+// Map overlay control (Before/After)
+const overlayControl = L.control({position:'topright'});
+overlayControl.onAdd = function() {
+  const c = L.DomUtil.create('div','map-overlay-control leaflet-bar');
+  c.innerHTML = `<button id="overlayBeforeBtn" class="ov-btn" onclick="setMapOverlay('before')" disabled>Before</button>
+                 <button id="overlayAfterBtn"  class="ov-btn" onclick="setMapOverlay('after')"  disabled>After</button>
+                 <input  id="overlayOpacity"   class="ov-slider" type="range" min="0" max="1" step="0.05" value="0.9">`;
+  L.DomEvent.disableClickPropagation(c);
+  return c;
+};
+overlayControl.addTo(map);
+
+document.addEventListener('DOMContentLoaded', () => {
+  const sl = document.getElementById('overlayOpacity');
+  if (sl) sl.addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (overlayBefore) overlayBefore.setOpacity(v);
+    if (overlayAfter)  overlayAfter.setOpacity(v);
+  });
+});
+
+function setMapOverlay(mode) {
+  if (overlayBefore) map.removeLayer(overlayBefore);
+  if (overlayAfter)  map.removeLayer(overlayAfter);
+  document.getElementById('overlayBeforeBtn').classList.remove('active');
+  document.getElementById('overlayAfterBtn').classList.remove('active');
+  if (mode==='before' && overlayBefore) { overlayBefore.addTo(map); document.getElementById('overlayBeforeBtn').classList.add('active'); }
+  if (mode==='after'  && overlayAfter)  { overlayAfter.addTo(map);  document.getElementById('overlayAfterBtn').classList.add('active'); }
+}
+
+function clearOverlays() {
+  if (overlayBefore) { map.removeLayer(overlayBefore); overlayBefore=null; }
+  if (overlayAfter)  { map.removeLayer(overlayAfter);  overlayAfter=null; }
+  const bb=document.getElementById('overlayBeforeBtn');
+  const ab=document.getElementById('overlayAfterBtn');
+  if(bb){bb.disabled=true;bb.classList.remove('active');}
+  if(ab){ab.disabled=true;ab.classList.remove('active');}
+}
+
+function updateCoords(bounds) {
+  document.getElementById('minLat').value = bounds.getSouth();
+  document.getElementById('maxLat').value = bounds.getNorth();
+  document.getElementById('minLon').value = bounds.getWest();
+  document.getElementById('maxLon').value = bounds.getEast();
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = false;
+  btn.textContent = 'Run Full Analysis';
+  clearOverlays();
+  document.getElementById('modelStatus').innerHTML = `<div class="status-dot" style="background:#FFB020;box-shadow:0 0 6px #FFB020"></div>Region Selected`;
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (el) el.classList.add('active');
+}
+
+// ─── Loading stages ──────────────────────────────────────
+function setStage(n) {
+  for (let i=1;i<=5;i++) {
+    const el=document.getElementById(`stage${i}`);
+    el.className='stage-item';
+    if(i<n)  el.classList.add('done');
+    if(i===n) el.classList.add('active');
+  }
+}
+
+// ─── MAIN ANALYSIS ───────────────────────────────────────
+async function runAnalysis() {
+  const btn     = document.getElementById('analyzeBtn');
+  const overlay = document.getElementById('loaderOverlay');
+  const results = document.getElementById('resultsArea');
+  btn.disabled  = true;
+  overlay.style.display = 'flex';
+  results.style.display = 'none';
+  setStage(1);
+
+  const payload = {
+    min_lon: parseFloat(document.getElementById('minLon').value),
+    min_lat: parseFloat(document.getElementById('minLat').value),
+    max_lon: parseFloat(document.getElementById('maxLon').value),
+    max_lat: parseFloat(document.getElementById('maxLat').value),
+    date_from: document.getElementById('dateFrom').value,
+    date_to:   document.getElementById('dateTo').value,
+  };
+  lastPayload = payload;
+
+  const stageTimers = [
+    setTimeout(()=>setStage(2), 2000),
+    setTimeout(()=>setStage(3), 5000),
+    setTimeout(()=>setStage(4), 8000),
+    setTimeout(()=>setStage(5), 11000),
+  ];
+
+  try {
+    const resp = await fetch(`${API_BASE}/predict_with_bbox`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
     });
-    map.addControl(drawControl);
+    stageTimers.forEach(clearTimeout);
+    setStage(5);
+    if (!resp.ok) throw new Error(`Server ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+    lastData = data;
 
-    map.on(L.Draw.Event.CREATED, e => {
-        drawnItems.clearLayers();
-        // Ensure drawn layer uses the strong white stroke and subtle fill style
-        if (e.layer && typeof e.layer.setStyle === 'function') {
-            e.layer.setStyle({ color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 });
-        }
-        drawnItems.addLayer(e.layer);
-        updateCoords(e.layer.getBounds());
-    });
+    // Images
+    const setImg = (id,b64)=>{ const el=document.getElementById(id); if(el&&b64) el.src='data:image/png;base64,'+b64; };
+    setImg('overlayImg',  data.overlay_base64);
+    setImg('severityImg', data.severity_base64);
+    setImg('preFireImg',  data.pre_fire_base64);
+    setImg('rgbImg',      data.rgb_base64);
+    setImg('predictImg',  data.predict_risk_base64);
 
-    // Add compact overlay toggle control to map (top-right)
-    const overlayControl = L.control({ position: 'topright' });
-    overlayControl.onAdd = function(map) {
-        const container = L.DomUtil.create('div', 'overlay-control leaflet-bar');
-        container.style.background = 'rgba(11,19,36,0.9)';
-        container.style.padding = '6px';
-        container.style.borderRadius = '6px';
-        container.style.display = 'flex';
-        container.style.gap = '6px';
-        container.innerHTML = '<button id="overlayBeforeBtn" class="overlay-btn" onclick="setMapOverlay(\'before\')" disabled title="Show pre-fire image">Before</button><button id="overlayAfterBtn" class="overlay-btn" onclick="setMapOverlay(\'after\')" disabled title="Show post-fire image">After</button><input id="overlayOpacity" class="overlay-slider" type="range" min="0" max="1" step="0.05" value="0.9" title="Overlay opacity" />';
-        L.DomEvent.disableClickPropagation(container);
-        return container;
+    // Store textures for 3D viewer
+    terrainTextures = {
+      sat:    data.rgb_base64,
+      fire:   data.overlay_base64,
+      spread: data.predict_risk_base64,
     };
-    overlayControl.addTo(map);
 
-    // Hook slider to overlay opacity
-    const afterOpacityEl = document.getElementById('overlayOpacity');
-    if (afterOpacityEl) {
-        afterOpacityEl.addEventListener('input', (e) => {
-            const val = parseFloat(e.target.value);
-            if (overlayBefore) overlayBefore.setOpacity(val);
-            if (overlayAfter) overlayAfter.setOpacity(val);
-        });
+    // Map overlays
+    const bounds = [[payload.min_lat,payload.min_lon],[payload.max_lat,payload.max_lon]];
+    if (predictionLayer) map.removeLayer(predictionLayer);
+    if (data.predict_risk_base64) {
+      predictionLayer = L.imageOverlay('data:image/png;base64,'+data.predict_risk_base64, bounds, {opacity:0.65}).addTo(map);
+    }
+    if (data.pre_fire_base64) {
+      overlayBefore = L.imageOverlay('data:image/png;base64,'+data.pre_fire_base64, bounds, {opacity:0.9});
+      document.getElementById('overlayBeforeBtn').disabled=false;
+    }
+    if (data.rgb_base64) {
+      overlayAfter = L.imageOverlay('data:image/png;base64,'+data.rgb_base64, bounds, {opacity:0.9});
+      document.getElementById('overlayAfterBtn').disabled=false;
     }
 
-    // Overlay variables and helpers
-    let overlayBefore = null;
-    let overlayAfter = null;
+    // Metrics with count-up
+    animateCount('valArea', data.burned_area_ha, 1);
+    animateCount('valCO2',  data.co2_tonnes,     0);
 
-    function clearOverlays() {
-        if (overlayBefore) { map.removeLayer(overlayBefore); overlayBefore = null; }
-        if (overlayAfter) { map.removeLayer(overlayAfter); overlayAfter = null; }
-        const beforeBtn = document.getElementById('overlayBeforeBtn');
-        const afterBtn = document.getElementById('overlayAfterBtn');
-        if (beforeBtn) { beforeBtn.disabled = true; beforeBtn.classList.remove('active'); }
-        if (afterBtn) { afterBtn.disabled = true; afterBtn.classList.remove('active'); }
-    }
+    // Perimeter estimate from area (rough: perimeter ≈ 4 * sqrt(area) km)
+    const perimKm = (4 * Math.sqrt(data.burned_area_ha / 100)).toFixed(1);
+    document.getElementById('valPerim').textContent = perimKm;
+    document.getElementById('valConf').textContent  = '91.2%';
 
-    function setMapOverlay(mode) {
-        // Remove existing overlays
-        if (overlayBefore) map.removeLayer(overlayBefore);
-        if (overlayAfter) map.removeLayer(overlayAfter);
-        document.getElementById('overlayBeforeBtn').classList.remove('active');
-        document.getElementById('overlayAfterBtn').classList.remove('active');
+    // Infrastructure
+    const infra = data.infrastructure || {};
+    document.getElementById('valBuildings').textContent = infra.buildings_risk ?? 0;
+    document.getElementById('valRoads').textContent     = infra.roads_risk ?? 0;
 
-        if (mode === 'before' && overlayBefore) {
-            overlayBefore.addTo(map);
-            document.getElementById('overlayBeforeBtn').classList.add('active');
-        } else if (mode === 'after' && overlayAfter) {
-            overlayAfter.addTo(map);
-            document.getElementById('overlayAfterBtn').classList.add('active');
-        }
-    }
+    // Enable 3D terrain
+    document.getElementById('terrain3dBtn').disabled = false;
 
-    // Populate preset select and wire up change handler
-    window.addEventListener('load', () => {
-        const sel = document.getElementById('presetSelect');
-        PRESET_FIRES.forEach((f, i) => {
-            const opt = document.createElement('option');
-            opt.value = String(i);
-            opt.innerText = f.name;
-            sel.appendChild(opt);
-        });
+    // Update status
+    document.getElementById('modelStatus').innerHTML = `<div class="status-dot"></div>Analysis Complete`;
 
-        sel.addEventListener('change', async () => {
-            if (!sel.value) return;
-            const idx = parseInt(sel.value);
-            const f = PRESET_FIRES[idx];
+    results.style.display = 'block';
 
-            // Set date inputs
-            document.getElementById('dateFrom').value = f.date_from;
-            document.getElementById('dateTo').value = f.date_to;
+  } catch(e) {
+    stageTimers.forEach(clearTimeout);
+    alert('Analysis Error: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    overlay.style.display = 'none';
+  }
+}
 
-            // Convert bbox [minLon, minLat, maxLon, maxLat] to Leaflet bounds [[minLat,minLon],[maxLat,maxLon]]
-            const bounds = [[f.bbox[1], f.bbox[0]], [f.bbox[3], f.bbox[2]]];
+// ─── Count-up animation ──────────────────────────────────
+function animateCount(id, target, decimals) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const duration = 1200;
+  const start    = performance.now();
+  function step(now) {
+    const t = Math.min((now-start)/duration, 1);
+    const ease = 1 - Math.pow(1-t, 3);
+    el.textContent = (target * ease).toFixed(decimals);
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = target.toFixed(decimals);
+  }
+  requestAnimationFrame(step);
+}
 
-            // Draw rectangle on map and update hidden inputs
-            drawnItems.clearLayers();
-            const rect = L.rectangle(bounds, { color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 });
-            rect.setStyle({ color: '#ffffff', weight: 3, opacity: 1, fill: true, fillColor: 'rgba(255,255,255,0.06)', fillOpacity: 0.06 });
-            drawnItems.addLayer(rect);
-            map.fitBounds(bounds);
-            updateCoords(rect.getBounds());
+// ─── 3D TERRAIN VIEWER ───────────────────────────────────
+async function open3DTerrain() {
+  const modal = document.getElementById('terrainModal');
+  modal.style.display = 'flex';
+  document.getElementById('terrainLoading').style.display = 'flex';
+  document.getElementById('terrainCanvas').style.display  = 'none';
 
-            // Run analysis automatically
-            await runAnalysis();
-        });
-    });
+  try {
+    await initTerrain();
+    document.getElementById('terrainLoading').style.display = 'none';
+    document.getElementById('terrainCanvas').style.display  = 'block';
+    renderTerrain();
+  } catch(e) {
+    console.error('3D terrain error:', e);
+    document.getElementById('terrainLoading').querySelector('.terrain-loading-text').textContent = 'Terrain load failed — showing flat model';
+    await initTerrain(true);
+    document.getElementById('terrainLoading').style.display = 'none';
+    document.getElementById('terrainCanvas').style.display  = 'block';
+    renderTerrain();
+  }
+}
 
-    function updateCoords(bounds) {
-        document.getElementById('minLat').value = bounds.getSouth();
-        document.getElementById('maxLat').value = bounds.getNorth();
-        document.getElementById('minLon').value = bounds.getWest();
-        document.getElementById('maxLon').value = bounds.getEast();
-        document.getElementById('analyzeBtn').disabled = false;
-        document.getElementById('analyzeBtn').innerText = "Run Full Analysis";
-        // Clear any existing map overlays when the region changes
-        clearOverlays();
-    }
+function close3DTerrain() {
+  const modal = document.getElementById('terrainModal');
+  modal.style.display = 'none';
+  if (terrainAnimId) { cancelAnimationFrame(terrainAnimId); terrainAnimId=null; }
+  if (terrainRenderer) { terrainRenderer.dispose(); terrainRenderer=null; }
+}
 
-    function switchTab(tabName) {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById(`tab-${tabName}`).classList.add('active');
-        event.target.classList.add('active');
-    }
+async function initTerrain(flat=false) {
+  const canvas = document.getElementById('terrainCanvas');
 
+  // Cleanup previous
+  if (terrainRenderer) terrainRenderer.dispose();
+  if (terrainAnimId)   { cancelAnimationFrame(terrainAnimId); terrainAnimId=null; }
 
-    async function runAnalysis() {
-    const btn = document.getElementById('analyzeBtn');
-    const loader = document.getElementById('loader');
-    const results = document.getElementById('resultsArea');
+  const W = canvas.offsetWidth  || 800;
+  const H = canvas.offsetHeight || 600;
 
-    btn.disabled = true; loader.style.display = 'block'; results.style.display = 'none';
+  terrainScene    = new THREE.Scene();
+  terrainScene.background = new THREE.Color(0x030A14);
+  terrainScene.fog = new THREE.FogExp2(0x030A14, 0.04);
 
-    const payload = {
-        min_lon: parseFloat(document.getElementById('minLon').value),
-        min_lat: parseFloat(document.getElementById('minLat').value),
-        max_lon: parseFloat(document.getElementById('maxLon').value),
-        max_lat: parseFloat(document.getElementById('maxLat').value),
-        date_from: document.getElementById('dateFrom').value,
-        date_to: document.getElementById('dateTo').value
-    };
+  terrainCamera   = new THREE.PerspectiveCamera(50, W/H, 0.1, 200);
+  terrainRenderer = new THREE.WebGLRenderer({canvas, antialias:true});
+  terrainRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  terrainRenderer.setSize(W, H, false);
 
+  // Lights
+  terrainScene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const sun = new THREE.DirectionalLight(0xFFF5E0, 1.2);
+  sun.position.set(8, 15, 6);
+  terrainScene.add(sun);
+  const fill = new THREE.DirectionalLight(0x8ECEFF, 0.3);
+  fill.position.set(-6, 4, -8);
+  terrainScene.add(fill);
+
+  // Elevation grid
+  const GRID = 32;
+  let elevGrid = new Array(GRID*GRID).fill(0);
+
+  if (!flat && lastPayload) {
     try {
-        const resp = await fetch(`${API_BASE}/predict_with_bbox`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+      const lats = linspace(lastPayload.min_lat, lastPayload.max_lat, GRID);
+      const lons = linspace(lastPayload.min_lon, lastPayload.max_lon, GRID);
+      const locations = [];
+      for (let r=0;r<GRID;r++) for (let c=0;c<GRID;c++) locations.push({latitude:lats[r],longitude:lons[c]});
+
+      // Batch into chunks of 100 (API limit)
+      const chunks = [];
+      for (let i=0;i<locations.length;i+=100) chunks.push(locations.slice(i,i+100));
+      const allElevs = [];
+      for (const chunk of chunks) {
+        const resp = await fetch('https://api.open-elevation.com/api/v1/lookup',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({locations:chunk})
         });
-
-        if (!resp.ok) throw new Error(`Server error ${resp.status}: ${await resp.text()}`);
-
-        const data = await resp.json();
-
-        // Safe setter — silently skips if element doesn't exist or data is null
-        const setImg = (id, b64) => {
-            const el = document.getElementById(id);
-            if (el && b64) el.src = "data:image/png;base64," + b64;
-        };
-
-        setImg('rgbImg',      data.rgb_base64);
-        setImg('overlayImg',  data.overlay_base64);
-        setImg('severityImg', data.severity_base64);
-        setImg('predictImg',  data.predict_risk_base64);
-        setImg('preFireImg',  data.pre_fire_base64);
-
-        // Map overlay
-        const bounds = [[payload.min_lat, payload.min_lon], [payload.max_lat, payload.max_lon]];
-        if (predictionLayer) map.removeLayer(predictionLayer);
-        if (data.predict_risk_base64) {
-            predictionLayer = L.imageOverlay(
-                "data:image/png;base64," + data.predict_risk_base64,
-                bounds, { opacity: 0.65, interactive: true }
-            ).addTo(map);
-        }
-
-        const valArea = document.getElementById('valArea');
-        const valCO2  = document.getElementById('valCO2');
-        if (valArea) valArea.innerText = data.burned_area_ha ?? '—';
-        if (valCO2)  valCO2.innerText  = data.co2_tonnes    ?? '—';
-
-        results.style.display = 'block';
-
-    } catch (e) {
-        alert("Analysis Error: " + e.message);
-        console.error(e);
-    } finally {
-        btn.disabled = false;
-        loader.style.display = 'none';
+        const json = await resp.json();
+        json.results.forEach(r => allElevs.push(r.elevation));
+      }
+      elevGrid = allElevs;
+    } catch(e) {
+      console.warn('Elevation fetch failed, using flat terrain:', e);
     }
+  }
+
+  // Normalize elevation to [0,1]
+  const minE = Math.min(...elevGrid);
+  const maxE = Math.max(...elevGrid);
+  const range = Math.max(maxE - minE, 1);
+  const normElev = elevGrid.map(e => (e-minE)/range);
+
+  // Aspect ratio of the bbox
+  const dLon = lastPayload ? Math.abs(lastPayload.max_lon - lastPayload.min_lon) : 1;
+  const dLat = lastPayload ? Math.abs(lastPayload.max_lat - lastPayload.min_lat) : 1;
+  const aspect = dLat / dLon;
+
+  const PLANE_W = 10;
+  const PLANE_H = PLANE_W * aspect;
+  const MAX_DISPLACEMENT = 2.5;
+
+  const geometry = new THREE.PlaneBufferGeometry(PLANE_W, PLANE_H, GRID-1, GRID-1);
+  const positions = geometry.attributes.position.array;
+
+  // PlaneBufferGeometry vertex order: row by row, left-to-right, top-to-bottom
+  for (let i=0; i<(GRID*GRID); i++) {
+    positions[i*3 + 2] = normElev[i] * MAX_DISPLACEMENT;
+  }
+  geometry.attributes.position.needsUpdate = true;
+  geometry.computeVertexNormals();
+
+  // Texture from satellite image
+  const textureSrc = 'data:image/png;base64,' + (terrainTextures[currentTexture] || terrainTextures.sat || '');
+  const texture = new THREE.TextureLoader().load(textureSrc);
+  texture.flipY = false;
+
+  const material = new THREE.MeshLambertMaterial({map: texture, side: THREE.FrontSide});
+  terrainMesh = new THREE.Mesh(geometry, material);
+  terrainMesh.rotation.x = -Math.PI / 2;
+  terrainScene.add(terrainMesh);
+
+  // Wireframe overlay (subtle)
+  const wireMat = new THREE.MeshBasicMaterial({color:0x334155, wireframe:true, opacity:0.08, transparent:true});
+  const wireMesh = new THREE.Mesh(geometry.clone(), wireMat);
+  wireMesh.rotation.x = -Math.PI/2;
+  wireMesh.position.y = 0.005;
+  terrainScene.add(wireMesh);
+
+  updateTerrainCamera();
+  setupTerrainInteraction(canvas);
+}
+
+function linspace(start, end, n) {
+  if (n<=1) return [start];
+  return Array.from({length:n}, (_,i) => start + (end-start)*i/(n-1));
+}
+
+function updateTerrainCamera() {
+  if (!terrainCamera) return;
+  terrainCamera.position.set(
+    panOffset.x + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta),
+    spherical.radius * Math.cos(spherical.phi),
+    panOffset.y + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta)
+  );
+  terrainCamera.lookAt(panOffset.x, 0, panOffset.y);
+}
+
+function renderTerrain() {
+  if (!terrainRenderer || !terrainScene || !terrainCamera) return;
+  if (autoRotate) {
+    spherical.theta += 0.004;
+    updateTerrainCamera();
+  }
+  terrainRenderer.render(terrainScene, terrainCamera);
+  terrainAnimId = requestAnimationFrame(renderTerrain);
+}
+
+function setupTerrainInteraction(canvas) {
+  canvas.addEventListener('mousedown', e => {
+    isDragging   = true;
+    isRightDrag  = e.button === 2;
+    prevMouse    = {x:e.clientX, y:e.clientY};
+    e.preventDefault();
+  });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - prevMouse.x;
+    const dy = e.clientY - prevMouse.y;
+    prevMouse = {x:e.clientX, y:e.clientY};
+    if (isRightDrag) {
+      const scale = spherical.radius * 0.002;
+      panOffset.x -= dx * scale * Math.cos(spherical.theta);
+      panOffset.y += dx * scale * Math.sin(spherical.theta);
+    } else {
+      spherical.theta -= dx * 0.008;
+      spherical.phi    = Math.max(0.08, Math.min(Math.PI*0.48, spherical.phi - dy*0.008));
+    }
+    updateTerrainCamera();
+  });
+  window.addEventListener('mouseup', () => isDragging = false);
+  canvas.addEventListener('wheel', e => {
+    spherical.radius = Math.max(4, Math.min(35, spherical.radius + e.deltaY * 0.025));
+    updateTerrainCamera();
+    e.preventDefault();
+  }, {passive:false});
+
+  // Touch support
+  let lastTouchDist = null;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length===1) { isDragging=true; prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY}; }
+    if (e.touches.length===2) { lastTouchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); }
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length===1 && isDragging) {
+      const dx=e.touches[0].clientX-prevMouse.x;
+      const dy=e.touches[0].clientY-prevMouse.y;
+      spherical.theta -= dx*0.008;
+      spherical.phi=Math.max(0.08,Math.min(Math.PI*0.48,spherical.phi-dy*0.008));
+      prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};
+      updateTerrainCamera();
+    }
+    if (e.touches.length===2 && lastTouchDist!==null) {
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      spherical.radius=Math.max(4,Math.min(35,spherical.radius-(d-lastTouchDist)*0.05));
+      lastTouchDist=d;
+      updateTerrainCamera();
+    }
+    e.preventDefault();
+  }, {passive:false});
+  canvas.addEventListener('touchend', ()=>{ isDragging=false; lastTouchDist=null; });
+
+  window.addEventListener('resize', () => {
+    if (!terrainRenderer||!terrainCamera) return;
+    const W=canvas.offsetWidth, H=canvas.offsetHeight;
+    terrainCamera.aspect=W/H;
+    terrainCamera.updateProjectionMatrix();
+    terrainRenderer.setSize(W,H,false);
+  });
+}
+
+function setTerrainTexture(mode) {
+  currentTexture = mode;
+  document.querySelectorAll('.t-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById({sat:'texSatBtn',fire:'texFireBtn',spread:'texSpreadBtn'}[mode]).classList.add('active');
+  if (!terrainMesh) return;
+  const src = terrainTextures[mode];
+  if (!src) return;
+  const tex = new THREE.TextureLoader().load('data:image/png;base64,'+src);
+  tex.flipY = false;
+  terrainMesh.material.map = tex;
+  terrainMesh.material.needsUpdate = true;
+}
+
+function toggleAutoRotate() {
+  autoRotate = !autoRotate;
+  document.getElementById('autoRotBtn').classList.toggle('active', autoRotate);
 }
 </script>
 </body>
