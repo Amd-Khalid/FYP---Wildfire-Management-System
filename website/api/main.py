@@ -183,9 +183,14 @@ async def predict_with_bbox(req: BBoxRequest):
     # 5. Pre-fire & severity
     pre_b64, sev_b64 = None, None
     sev_counts = {"high": 0, "moderate": 0, "low": 0}
+
+    post_rgb_raw = np.stack([bands[2], bands[1], bands[0]], -1)
+    rgb_vis      = robust_rgb_stretch(post_rgb_raw)
+
     try:
-        pre_date  = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
-        pre_bands = sentinel_api.download_imagery(bbox, pre_date, pre_date)
+        pre_date_to   = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=20)).strftime("%Y-%m-%d")
+        pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=45)).strftime("%Y-%m-%d")
+        pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
 
         pre_rgb_raw = np.stack([pre_bands[2], pre_bands[1], pre_bands[0]], -1)
         fig_pre, ax_pre = plt.subplots(figsize=(5, 5))
@@ -196,15 +201,15 @@ async def predict_with_bbox(req: BBoxRequest):
         pre_nbr = (pre_bands[3] - pre_bands[4]) / (pre_bands[3] + pre_bands[4] + 1e-8)
         dnbr    = pre_nbr - nbr_post
         fig_sev, ax_sev = plt.subplots(figsize=(5, 5))
-        ax_sev.imshow(np.where(burn_mask == 1, dnbr, np.nan), cmap='YlOrRd', vmin=0.1, vmax=0.6)
+        ax_sev.imshow(rgb_vis)
+        ax_sev.imshow(np.where(burn_mask == 1, dnbr, np.nan), cmap='YlOrRd', vmin=0.1, vmax=0.6, alpha=0.75)
         ax_sev.axis('off')
         sev_b64 = fig_to_base64(fig_sev)
     except Exception as e:
         print(f"! Pre-fire error: {e}")
 
     # 6. Post-fire imagery
-    post_rgb_raw = np.stack([bands[2], bands[1], bands[0]], -1)
-    rgb_vis      = robust_rgb_stretch(post_rgb_raw)
+    
 
     fig_rgb, ax_rgb = plt.subplots(figsize=(5, 5))
     ax_rgb.imshow(rgb_vis)
@@ -235,7 +240,8 @@ async def predict_with_bbox(req: BBoxRequest):
             )
             risk = np.where(spread['prediction_risk'] > 0.15, spread['prediction_risk'], 0.0)
             risk[0:5, :], risk[-5:, :], risk[:, 0:5], risk[:, -5:] = 0, 0, 0, 0
-            ax_p.imshow(risk, cmap=cmap)
+            ax_p.imshow(rgb_vis)
+            ax_p.imshow(risk, cmap=cmap, alpha=0.75)
             ax_p.axis('off')
             pred_b64 = fig_to_base64(fig_p)
     except Exception as e:

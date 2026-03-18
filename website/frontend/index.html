@@ -872,11 +872,11 @@ select option { background: #0f1c2e; color: var(--text); }
           </div>
 
           <div id="tab-overlay" class="tab-content active" style="margin-top:0.5rem;">
-            <img id="overlayImg" class="tab-img" src="" alt="">
+            <img id="overlayImg" class="tab-img" src="" alt="" style="cursor:zoom-in;" onclick="openLightbox(lastData&&lastData.overlay_base64,'Fire Detection Overlay')">
           </div>
 
           <div id="tab-severity" class="tab-content" style="margin-top:0.5rem;">
-            <img id="severityImg" class="tab-img" src="" alt="">
+            <img id="severityImg" class="tab-img" src="" alt="" style="cursor:zoom-in;" onclick="openLightbox(lastData&&lastData.severity_base64,'Burn Severity — dNBR')">
             <div class="colorbar" style="margin-top:0.5rem;">
               <div style="flex:1;background:#fde047;"></div>
               <div style="flex:1;background:#f97316;"></div>
@@ -895,7 +895,7 @@ select option { background: #0f1c2e; color: var(--text); }
 
           <div id="tab-prediction" class="tab-content" style="margin-top:0.5rem;">
             <div class="section-label" style="margin-bottom:0.5rem;">Fire Spread Risk Prediction</div>
-            <img id="predictImg" class="tab-img" src="" alt="Run analysis to generate prediction">
+            <img id="predictImg" class="tab-img" src="" alt="Run analysis to generate prediction" style="cursor:zoom-in;" onclick="openLightbox(lastData&&lastData.predict_risk_base64,'Fire Spread Risk Prediction')">
             <div class="colorbar" style="margin-top:0.5rem;">
               <div style="flex:1;background:#fbbf24;"></div>
               <div style="flex:1;background:#f97316;"></div>
@@ -1178,19 +1178,22 @@ overlayControl.addTo(map);
 document.addEventListener('DOMContentLoaded', () => {
   const sl = document.getElementById('overlayOpacity');
   if (sl) sl.addEventListener('input', e => {
-    const v = parseFloat(e.target.value);
-    if (overlayBefore) overlayBefore.setOpacity(v);
-    if (overlayAfter)  overlayAfter.setOpacity(v);
+    if (predictionLayer) predictionLayer.setOpacity(parseFloat(e.target.value));
   });
 });
 
 function setMapOverlay(mode) {
-  if (overlayBefore) map.removeLayer(overlayBefore);
-  if (overlayAfter)  map.removeLayer(overlayAfter);
+  if (!lastData || !lastPayload) return;
+  const bounds = [[lastPayload.min_lat,lastPayload.min_lon],[lastPayload.max_lat,lastPayload.max_lon]];
+  const opacity = parseFloat(document.getElementById('overlayOpacity').value);
+  if (predictionLayer) map.removeLayer(predictionLayer);
   document.getElementById('overlayBeforeBtn').classList.remove('active');
   document.getElementById('overlayAfterBtn').classList.remove('active');
-  if (mode==='before' && overlayBefore) { overlayBefore.addTo(map); document.getElementById('overlayBeforeBtn').classList.add('active'); }
-  if (mode==='after'  && overlayAfter)  { overlayAfter.addTo(map);  document.getElementById('overlayAfterBtn').classList.add('active'); }
+  const src = mode === 'before' ? lastData.pre_fire_base64 : lastData.rgb_base64;
+  if (src) {
+    predictionLayer = L.imageOverlay('data:image/png;base64,'+src, bounds, {opacity}).addTo(map);
+    document.getElementById(mode==='before' ? 'overlayBeforeBtn' : 'overlayAfterBtn').classList.add('active');
+  }
 }
 
 function clearOverlays() {
@@ -1286,8 +1289,9 @@ async function runAnalysis() {
     // Map overlays
     const bounds = [[payload.min_lat,payload.min_lon],[payload.max_lat,payload.max_lon]];
     if (predictionLayer) map.removeLayer(predictionLayer);
-    if (data.predict_risk_base64) {
-      predictionLayer = L.imageOverlay('data:image/png;base64,'+data.predict_risk_base64, bounds, {opacity:0.65}).addTo(map);
+    // Default visible layer: fire detection overlay on satellite imagery
+    if (data.overlay_base64) {
+      predictionLayer = L.imageOverlay('data:image/png;base64,'+data.overlay_base64, bounds, {opacity:0.85}).addTo(map);
     }
     if (data.pre_fire_base64) {
       overlayBefore = L.imageOverlay('data:image/png;base64,'+data.pre_fire_base64, bounds, {opacity:0.9});
@@ -1894,6 +1898,27 @@ function toggleAutoRotate() {
   autoRotate = !autoRotate;
   document.getElementById('autoRotBtn').classList.toggle('active', autoRotate);
 }
+
+function openLightbox(src, label) {
+  if (!src) return;
+  document.getElementById('lightboxImg').src = 'data:image/png;base64,' + src;
+  document.getElementById('lightboxLabel').textContent = label;
+  const lb = document.getElementById('imgLightbox');
+  lb.style.display = 'flex';
+  lb.onclick = e => { if (e.target === lb) closeLightbox(); };
+}
+function closeLightbox() {
+  document.getElementById('imgLightbox').style.display = 'none';
+}
+
 </script>
+
+<!-- IMAGE LIGHTBOX -->
+<div id="imgLightbox" style="display:none;position:fixed;inset:0;background:rgba(3,10,20,0.92);backdrop-filter:blur(6px);z-index:7000;align-items:center;justify-content:center;flex-direction:column;gap:1rem;">
+  <button onclick="closeLightbox()" style="position:absolute;top:1rem;right:1.25rem;background:rgba(255,59,59,0.12);border:1px solid rgba(255,59,59,0.35);color:#FF7070;font-family:var(--font-h);font-size:0.85rem;font-weight:700;letter-spacing:0.06em;padding:0.4rem 1rem;border-radius:6px;cursor:pointer;">✕ CLOSE</button>
+  <img id="lightboxImg" style="max-width:90vw;max-height:85vh;border-radius:8px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 20px 60px rgba(0,0,0,0.7);" src="" alt=""/>
+  <div id="lightboxLabel" style="font-family:var(--font-h);font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);"></div>
+</div>
+
 </body>
 </html>
