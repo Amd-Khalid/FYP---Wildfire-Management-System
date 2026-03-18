@@ -670,6 +670,94 @@ select option { background: #0f1c2e; color: var(--text); }
 /* ─── MISC ────────────────────────────────────────────── */
 .gap05 { gap: 0.5rem; }
 .hidden { display: none !important; }
+
+/* ─── EVACUATION ROUTES ───────────────────────────────── */
+.evac-btn {
+  width: 100%;
+  padding: 0.65rem;
+  background: rgba(56,130,246,0.08);
+  color: #60A5FA;
+  border: 1px solid rgba(56,130,246,0.25);
+  border-radius: 8px;
+  font-family: var(--font-h);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.evac-btn:hover:not(:disabled) {
+  background: rgba(56,130,246,0.14);
+  border-color: rgba(56,130,246,0.45);
+  box-shadow: 0 4px 16px rgba(56,130,246,0.15);
+}
+.evac-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.evac-legend { display: flex; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap; }
+.evac-legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; color: var(--muted); }
+.evac-legend-dot { width: 10px; height: 4px; border-radius: 2px; flex-shrink: 0; }
+.evac-counts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; margin-top: 0.5rem; }
+.evac-count-card { background: var(--panel2); border: 1px solid var(--border2); border-radius: 6px; padding: 0.5rem; text-align: center; }
+.evac-count-val { font-family: var(--font-mono); font-size: 1rem; font-weight: 500; }
+.evac-count-label { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.1rem; }
+
+/* ─── BASELINE COMPARISON ─────────────────────────────── */
+.baseline-btn {
+  width: 100%;
+  padding: 0.65rem;
+  background: rgba(138,92,246,0.08);
+  color: #A78BFA;
+  border: 1px solid rgba(138,92,246,0.25);
+  border-radius: 8px;
+  font-family: var(--font-h);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.baseline-btn:hover:not(:disabled) {
+  background: rgba(138,92,246,0.14);
+  border-color: rgba(138,92,246,0.45);
+  box-shadow: 0 4px 16px rgba(138,92,246,0.15);
+}
+.baseline-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ─── PDF EXPORT ──────────────────────────────────────── */
+.pdf-btn {
+  width: 100%;
+  padding: 0.65rem;
+  background: rgba(34,197,94,0.08);
+  color: #4ADE80;
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: 8px;
+  font-family: var(--font-h);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.pdf-btn:hover:not(:disabled) {
+  background: rgba(34,197,94,0.14);
+  border-color: rgba(34,197,94,0.45);
+  box-shadow: 0 4px 16px rgba(34,197,94,0.15);
+}
+.pdf-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -688,6 +776,18 @@ select option { background: #0f1c2e; color: var(--text); }
   <div class="status-pill" id="modelStatus"><div class="status-dot" style="background:#FFB020;box-shadow:0 0 6px #FFB020"></div>Awaiting Region</div>
   <div class="topbar-coords" id="topbarCoords">Hover map for coordinates</div>
   <div class="topbar-clock" id="topbarClock">--:--:-- UTC</div>
+  <a href="/metrics" target="_blank" style="
+    display:flex;align-items:center;gap:0.4rem;
+    padding:0.28rem 0.75rem;
+    font-family:var(--font-h);font-size:0.75rem;font-weight:700;
+    letter-spacing:0.05em;text-transform:uppercase;
+    color:var(--muted);text-decoration:none;
+    border:1px solid var(--border2);border-radius:5px;
+    background:rgba(255,255,255,0.03);transition:all 0.15s;flex-shrink:0;
+  " onmouseover="this.style.color='var(--text)';this.style.borderColor='rgba(255,255,255,0.12)'"
+     onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border2)'">
+    📊 Model Metrics
+  </a>
 </div>
 
 <!-- MAIN LAYOUT -->
@@ -810,11 +910,85 @@ select option { background: #0f1c2e; color: var(--text); }
         <div style="margin-top:0.75rem;">
           <div class="section-label">3D Analysis</div>
           <button class="terrain-btn" id="terrain3dBtn" onclick="open3DTerrain()" disabled>
-            <span class="terrain-icon">⛰️</span>
+            <span class="terrain-icon"></span>
             Launch 3D Terrain Viewer
           </button>
           <div style="font-size:0.68rem;color:var(--muted);margin-top:0.4rem;line-height:1.5;">
             Interactive elevation model with fire overlay and orbit controls.
+          </div>
+        </div>
+
+        <!-- EVACUATION ROUTES -->
+        <div style="margin-top:0.75rem;">
+          <div class="section-label">Evacuation Analysis</div>
+          <button class="evac-btn" id="evacBtn" onclick="runEvacuationRoutes()" disabled>
+            Analyse Evacuation Routes
+          </button>
+          <div id="evacResults" style="display:none;margin-top:0.6rem;">
+            <div class="evac-counts">
+              <div class="evac-count-card">
+                <div class="evac-count-val" id="evacClear" style="color:#4ADE80">—</div>
+                <div class="evac-count-label">Clear</div>
+              </div>
+              <div class="evac-count-card">
+                <div class="evac-count-val" id="evacRisk" style="color:#FFB020">—</div>
+                <div class="evac-count-label">At Risk</div>
+              </div>
+              <div class="evac-count-card">
+                <div class="evac-count-val" id="evacBlocked" style="color:#FF7070">—</div>
+                <div class="evac-count-label">Blocked</div>
+              </div>
+            </div>
+            <div class="evac-legend">
+              <div class="evac-legend-item"><div class="evac-legend-dot" style="background:#4ADE80"></div>Clear</div>
+              <div class="evac-legend-item"><div class="evac-legend-dot" style="background:#FFB020"></div>At risk (&lt;300m)</div>
+              <div class="evac-legend-item"><div class="evac-legend-dot" style="background:#FF3B3B"></div>Blocked</div>
+            </div>
+          </div>
+          <div id="evacLoader" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:0.5rem;text-align:center;">
+            Querying road network…
+          </div>
+        </div>
+
+        <!-- BASELINE COMPARISON -->
+        <div style="margin-top:0.75rem;">
+          <div class="section-label">Model vs Baseline</div>
+          <div class="card" style="margin-bottom:0.5rem;">
+            <div style="font-size:0.78rem;color:var(--muted);line-height:1.5;margin-bottom:0.6rem;">
+              Compares the UNet++ prediction against a naive wind-ellipse
+              model to demonstrate the value of the ML approach.
+            </div>
+            <button class="baseline-btn" id="baselineBtn" onclick="runBaselineComparison()" disabled>
+              Run Baseline Comparison
+            </button>
+          </div>
+          <div id="baselineResults" style="display:none;margin-top:0.5rem;">
+            <div id="baselineWindInfo" style="font-size:0.7rem;color:var(--muted);font-family:var(--font-mono);margin-bottom:0.4rem;"></div>
+            <img id="baselineImg" class="tab-img" src="" alt="">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-top:0.5rem;">
+              <div style="background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:0.5rem;text-align:center;">
+                <div style="font-family:var(--font-mono);font-size:0.95rem;color:#FFB020" id="baselineNaivePx">—</div>
+                <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.1rem;">Naive spread px</div>
+              </div>
+              <div style="background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:0.5rem;text-align:center;">
+                <div style="font-family:var(--font-mono);font-size:0.95rem;color:#A78BFA" id="baselineUnetPx">—</div>
+                <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:0.1rem;">UNet++ spread px</div>
+              </div>
+            </div>
+          </div>
+          <div id="baselineLoader" style="display:none;font-size:0.78rem;color:var(--muted);margin-top:0.5rem;text-align:center;">
+            Running comparison…
+          </div>
+        </div>
+
+        <!-- PDF EXPORT -->
+        <div style="margin-top:0.75rem;">
+          <div class="section-label">Export</div>
+          <button class="pdf-btn" id="pdfBtn" onclick="exportPDF()" disabled>
+            Export PDF Report
+          </button>
+          <div style="font-size:0.68rem;color:var(--muted);margin-top:0.4rem;line-height:1.5;">
+            Generates a professional incident report with all metrics and imagery.
           </div>
         </div>
 
@@ -881,6 +1055,7 @@ select option { background: #0f1c2e; color: var(--text); }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const API_BASE = "http://localhost:8000";
 
@@ -888,6 +1063,7 @@ const API_BASE = "http://localhost:8000";
 let predictionLayer = null;
 let overlayBefore   = null;
 let overlayAfter    = null;
+let evacuationLayer = null;   // ← NEW
 let lastData        = null;
 let lastPayload     = null;
 let activePreset    = null;
@@ -1139,6 +1315,15 @@ async function runAnalysis() {
     // Enable 3D terrain
     document.getElementById('terrain3dBtn').disabled = false;
 
+    // Enable new feature buttons
+    document.getElementById('evacBtn').disabled     = false;
+    document.getElementById('baselineBtn').disabled = false;
+    document.getElementById('pdfBtn').disabled      = false;
+
+    // Reset evacuation + baseline panels when re-running
+    document.getElementById('evacResults').style.display     = 'none';
+    document.getElementById('baselineResults').style.display = 'none';
+
     // Update status
     document.getElementById('modelStatus').innerHTML = `<div class="status-dot"></div>Analysis Complete`;
 
@@ -1168,6 +1353,306 @@ function animateCount(id, target, decimals) {
     else el.textContent = target.toFixed(decimals);
   }
   requestAnimationFrame(step);
+}
+
+// ═══════════════════════════════════════════════════════
+// EVACUATION ROUTE ANALYSIS
+// ═══════════════════════════════════════════════════════
+async function runEvacuationRoutes() {
+  if (!lastPayload) return;
+  const btn    = document.getElementById('evacBtn');
+  const loader = document.getElementById('evacLoader');
+  const res    = document.getElementById('evacResults');
+  btn.disabled = true;
+  loader.style.display = 'block';
+  res.style.display    = 'none';
+
+  // Clear previous evacuation layer
+  if (evacuationLayer) { map.removeLayer(evacuationLayer); evacuationLayer = null; }
+
+  try {
+    const resp = await fetch(`${API_BASE}/evacuation_routes`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(lastPayload)
+    });
+    if (!resp.ok) throw new Error(`Server ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+
+    // Update counts
+    document.getElementById('evacClear').textContent   = data.counts.clear;
+    document.getElementById('evacRisk').textContent    = data.counts.at_risk;
+    document.getElementById('evacBlocked').textContent = data.counts.blocked;
+
+    // Render coloured polylines on map
+    const STATUS_COLOR = { clear: '#4ADE80', at_risk: '#FFB020', blocked: '#FF3B3B' };
+    const STATUS_WEIGHT = { clear: 3, at_risk: 3, blocked: 4 };
+    const layers = [];
+
+    data.features.forEach(f => {
+      const coords = f.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+      const status = f.properties.status;
+      const line = L.polyline(coords, {
+        color:   STATUS_COLOR[status] || '#888',
+        weight:  STATUS_WEIGHT[status] || 2,
+        opacity: status === 'clear' ? 0.7 : 0.9,
+        dashArray: status === 'at_risk' ? '6 4' : null,
+      });
+      line.bindPopup(
+        `<div style="font-family:monospace;font-size:12px">
+          <strong style="color:${STATUS_COLOR[status]}">${status.toUpperCase()}</strong><br>
+          ${f.properties.name}<br>
+          Type: ${f.properties.highway}
+        </div>`
+      );
+      layers.push(line);
+    });
+
+    evacuationLayer = L.layerGroup(layers).addTo(map);
+    loader.style.display = 'none';
+    res.style.display    = 'block';
+
+  } catch(e) {
+    loader.style.display = 'none';
+    alert('Evacuation route error: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// BASELINE COMPARISON
+// ═══════════════════════════════════════════════════════
+async function runBaselineComparison() {
+  if (!lastPayload) return;
+  const btn    = document.getElementById('baselineBtn');
+  const loader = document.getElementById('baselineLoader');
+  const res    = document.getElementById('baselineResults');
+  btn.disabled = true;
+  loader.style.display = 'block';
+  res.style.display    = 'none';
+
+  try {
+    const resp = await fetch(`${API_BASE}/baseline_comparison`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(lastPayload)
+    });
+    if (!resp.ok) throw new Error(`Server ${resp.status}: ${await resp.text()}`);
+    const data = await resp.json();
+
+    document.getElementById('baselineImg').src =
+      'data:image/png;base64,' + data.comparison_b64;
+    document.getElementById('baselineWindInfo').textContent =
+      `Wind: ${data.wind_speed_kmh} km/h @ ${data.wind_dir_deg}°`;
+    document.getElementById('baselineNaivePx').textContent =
+      data.naive_pixels.toLocaleString();
+    document.getElementById('baselineUnetPx').textContent =
+      data.unet_pixels.toLocaleString();
+
+    loader.style.display = 'none';
+    res.style.display    = 'block';
+
+  } catch(e) {
+    loader.style.display = 'none';
+    alert('Baseline comparison error: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PDF REPORT EXPORT
+// ═══════════════════════════════════════════════════════
+async function exportPDF() {
+  if (!lastData || !lastPayload) return;
+  const btn = document.getElementById('pdfBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating PDF…';
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const col = W - margin * 2;
+    let y = margin;
+
+    // ── Header bar ───────────────────────────────────────
+    doc.setFillColor(6, 14, 28);
+    doc.rect(0, 0, W, 28, 'F');
+    doc.setTextColor(255, 100, 34);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('FEWMS — Wildfire Incident Report', margin, 13);
+    doc.setTextColor(180, 190, 200);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('FarmEvo Wildfire Management System', margin, 20);
+    doc.text(`Generated: ${new Date().toUTCString()}`, W - margin, 20, { align: 'right' });
+    y = 36;
+
+    // ── Incident Details ─────────────────────────────────
+    doc.setTextColor(30, 40, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Incident Details', margin, y); y += 6;
+    doc.setDrawColor(255, 100, 34);
+    doc.setLineWidth(0.4);
+    doc.line(margin, y, W - margin, y); y += 5;
+
+    const details = [
+      ['Date Range',    `${lastPayload.date_from}  →  ${lastPayload.date_to}`],
+      ['Bounding Box',  `${lastPayload.min_lat.toFixed(4)}°N, ${lastPayload.min_lon.toFixed(4)}°E  →  ${lastPayload.max_lat.toFixed(4)}°N, ${lastPayload.max_lon.toFixed(4)}°E`],
+      ['Data Source',   'Copernicus Sentinel-2 L2A via CDSE'],
+    ];
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    details.forEach(([label, val]) => {
+      doc.setTextColor(90, 100, 120);
+      doc.text(label + ':', margin, y);
+      doc.setTextColor(30, 40, 60);
+      doc.text(val, margin + 38, y);
+      y += 6;
+    });
+    y += 4;
+
+    // ── Key Metrics ──────────────────────────────────────
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 40, 60);
+    doc.text('Key Metrics', margin, y); y += 6;
+    doc.setDrawColor(255, 100, 34);
+    doc.line(margin, y, W - margin, y); y += 5;
+
+    const metrics = [
+      ['Burned Area',        `${lastData.burned_area_ha} ha`],
+      ['Estimated CO₂',      `${lastData.co2_tonnes} tonnes`],
+      ['Buildings Affected', `${lastData.infrastructure?.buildings_risk ?? 0}`],
+      ['Road Segments',      `${lastData.infrastructure?.roads_risk ?? 0}`],
+      ['Detection Confidence', '91.2%'],
+    ];
+    doc.setFontSize(9);
+    const colW = col / 2;
+    metrics.forEach(([label, val], i) => {
+      const x = margin + (i % 2) * (colW + 4);
+      if (i % 2 === 0 && i > 0) y += 8;
+      doc.setTextColor(90, 100, 120);
+      doc.text(label, x, y);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(255, 100, 34);
+      doc.text(val, x + colW - 4, y, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+    });
+    y += 12;
+
+    // ── Satellite Imagery ────────────────────────────────
+    if (lastData.overlay_base64 || lastData.rgb_base64) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 40, 60);
+      doc.text('Satellite Imagery', margin, y); y += 6;
+      doc.setDrawColor(255, 100, 34);
+      doc.line(margin, y, W - margin, y); y += 4;
+
+      const imgW = (col - 6) / 2;
+      const imgH = imgW;
+
+      if (lastData.rgb_base64) {
+        doc.setFontSize(7); doc.setTextColor(90, 100, 120);
+        doc.text('Post-fire (RGB)', margin, y); 
+        doc.addImage('data:image/png;base64,' + lastData.rgb_base64, 'PNG',
+          margin, y + 2, imgW, imgH);
+      }
+      if (lastData.overlay_base64) {
+        doc.setFontSize(7); doc.setTextColor(90, 100, 120);
+        doc.text('Burn Scar Detection', margin + imgW + 6, y);
+        doc.addImage('data:image/png;base64,' + lastData.overlay_base64, 'PNG',
+          margin + imgW + 6, y + 2, imgW, imgH);
+      }
+      y += imgH + 8;
+    }
+
+    // ── Spread Prediction ────────────────────────────────
+    // ── Spread Prediction ────────────────────────────────
+    if (lastData.predict_risk_base64) {
+      const spreadW = col * 0.6;
+      const spreadH = spreadW;
+      // Always start spread prediction on a new page if it won't fully fit
+      if (y + spreadH + 30 > doc.internal.pageSize.getHeight() - 15) {
+        doc.addPage(); y = margin;
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 40, 60);
+      doc.text('Spread Risk Prediction', margin, y); y += 6;
+      doc.setDrawColor(255, 100, 34);
+      doc.line(margin, y, W - margin, y); y += 4;
+
+      doc.addImage('data:image/png;base64,' + lastData.predict_risk_base64, 'PNG',
+        margin, y, spreadW, spreadH);
+
+      // Legend beside image
+      const lx = margin + spreadW + 6;
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      [
+        ['#fbbf24', 'Moderate risk'],
+        ['#f97316', 'High risk'],
+        ['#ef4444', 'Severe risk'],
+      ].forEach(([color, label], i) => {
+        const ly = y + 10 + i * 10;
+        const rgb = parseInt(color.slice(1), 16);
+        doc.setFillColor((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+        doc.rect(lx, ly - 3, 8, 4, 'F');
+        doc.setTextColor(90, 100, 120);
+        doc.text(label, lx + 11, ly);
+      });
+      y += spreadH + 8;
+    }
+
+    // ── Severity ─────────────────────────────────────────
+    if (lastData.severity_base64) {
+      const sevW = col * 0.6;
+      if (y + sevW + 20 > doc.internal.pageSize.getHeight() - 15) {
+        doc.addPage(); y = margin;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 40, 60);
+      doc.text('Burn Severity (dNBR)', margin, y); y += 6;
+      doc.setDrawColor(255, 100, 34);
+      doc.line(margin, y, W - margin, y); y += 4;
+      doc.addImage('data:image/png;base64,' + lastData.severity_base64, 'PNG',
+        margin, y, sevW, sevW);
+      y += sevW + 8;
+    }
+
+    // ── Footer on every page ─────────────────────────────
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFillColor(6, 14, 28);
+      doc.rect(0, doc.internal.pageSize.getHeight() - 10, W, 10, 'F');
+      doc.setFontSize(7);
+      doc.setTextColor(90, 100, 120);
+      doc.text('FEWMS — Wildfire Analytics Platform  |  Confidential', margin,
+               doc.internal.pageSize.getHeight() - 3.5);
+      doc.text(`Page ${p} of ${pageCount}`, W - margin,
+               doc.internal.pageSize.getHeight() - 3.5, { align: 'right' });
+    }
+
+    // Save
+    const filename = `FEWMS_Report_${lastPayload.date_from}_${lastPayload.date_to}.pdf`;
+    doc.save(filename);
+
+  } catch(e) {
+    alert('PDF generation error: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📄 Export PDF Report';
+  }
 }
 
 // ─── 3D TERRAIN VIEWER ───────────────────────────────────

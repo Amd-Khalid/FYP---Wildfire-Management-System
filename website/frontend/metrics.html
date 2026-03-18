@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FEWMS — Model Performance Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:      #030A14;
+  --panel:   #060E1C;
+  --panel2:  #0A1628;
+  --border:  rgba(255,255,255,0.05);
+  --accent:  #FF6422;
+  --teal:    #22D3A0;
+  --purple:  #A78BFA;
+  --amber:   #FFB020;
+  --danger:  #FF3B3B;
+  --text:    #DCE8F0;
+  --muted:   #6A7E95;
+  --dim:     #1e293b;
+  --font-h:    'Rajdhani', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-body: 'Source Sans 3', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TOP BAR ─────────────────────────────────────────── */
+.topbar {
+  height: 46px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-logo-text {
+  font-family: var(--font-h);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+.topbar-divider { width: 1px; height: 22px; background: var(--border); }
+.topbar-title {
+  font-family: var(--font-h);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.back-link {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-h);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  transition: all 0.15s;
+}
+.back-link:hover { color: var(--text); border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); }
+
+/* ── LAYOUT ──────────────────────────────────────────── */
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* ── SECTION HEADING ─────────────────────────────────── */
+.section-heading {
+  font-family: var(--font-h);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.section-heading::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── MODEL HEADER CARD ───────────────────────────────── */
+.model-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.model-header-accent {
+  width: 4px;
+  border-radius: 2px;
+  align-self: stretch;
+  flex-shrink: 0;
+}
+.model-name {
+  font-family: var(--font-h);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+.model-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+.model-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.tag {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.model-header-right {
+  margin-left: auto;
+  text-align: right;
+  flex-shrink: 0;
+}
+.best-epoch-val {
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+}
+.best-epoch-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 0.15rem;
+}
+
+/* ── METRIC CARDS GRID ───────────────────────────────── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 900px) { .metrics-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.metric-card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+.metric-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  border-radius: 0 0 8px 8px;
+}
+.metric-card.iou::after    { background: var(--teal); }
+.metric-card.f1::after     { background: var(--purple); }
+.metric-card.prec::after   { background: var(--amber); }
+.metric-card.rec::after    { background: var(--accent); }
+.metric-card.acc::after    { background: #60A5FA; }
+
+.metric-val {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 500;
+  line-height: 1;
+  margin-bottom: 0.15rem;
+}
+.metric-card.iou .metric-val   { color: var(--teal); }
+.metric-card.f1 .metric-val    { color: var(--purple); }
+.metric-card.prec .metric-val  { color: var(--amber); }
+.metric-card.rec .metric-val   { color: var(--accent); }
+.metric-card.acc .metric-val   { color: #60A5FA; }
+
+.metric-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+.metric-bar {
+  margin-top: 0.5rem;
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.metric-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease;
+}
+.metric-card.iou  .metric-bar-fill { background: var(--teal); }
+.metric-card.f1   .metric-bar-fill { background: var(--purple); }
+.metric-card.prec .metric-bar-fill { background: var(--amber); }
+.metric-card.rec  .metric-bar-fill { background: var(--accent); }
+.metric-card.acc  .metric-bar-fill { background: #60A5FA; }
+
+/* ── CHART GRID ──────────────────────────────────────── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 800px) { .chart-grid { grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+.chart-card-title {
+  font-family: var(--font-h);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.85rem;
+}
+.chart-canvas-wrap {
+  position: relative;
+  height: 180px;
+}
+
+/* ── CONFUSION MATRIX ────────────────────────────────── */
+.confusion-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  max-width: 240px;
+  margin: 0 auto;
+}
+.conf-cell {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.5rem;
+}
+.conf-val {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+.conf-lbl {
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* ── CLASS BREAKDOWN TABLE ───────────────────────────── */
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.breakdown-table th {
+  font-family: var(--font-h);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.breakdown-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.breakdown-table tr:last-child td { border-bottom: none; }
+.class-pill {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* ── TRAINING INFO GRID ──────────────────────────────── */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 800px) { .info-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.info-card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.info-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 600;
+}
+.info-val {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+/* ── MODEL COMPARISON BAR CHART ──────────────────────── */
+.comparison-section {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.comparison-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.comparison-row:last-child { margin-bottom: 0; }
+.comp-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  width: 80px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.comp-bars { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+.comp-bar-row { display: flex; align-items: center; gap: 0.5rem; }
+.comp-bar-track {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.comp-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1.2s ease;
+}
+.comp-bar-val {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  width: 36px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.comp-model-label {
+  font-size: 0.62rem;
+  color: var(--muted);
+  width: 80px;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+/* ── DIVIDER ─────────────────────────────────────────── */
+.divider { height: 2rem; }
+
+/* ── LOADING ─────────────────────────────────────────── */
+#loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1rem;
+}
+.loader-ring {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,100,34,0.15);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-family: var(--font-h); font-size: 0.9rem; color: var(--muted); letter-spacing: 0.04em; }
+
+#dashboardContent { display: none; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo-text">FEWMS</div>
+  <div class="topbar-divider"></div>
+  <div class="topbar-title">Model Performance Dashboard</div>
+  <a class="back-link" href="/">← Back to Map</a>
+</div>
+
+<div class="page">
+
+  <!-- Loading state -->
+  <div id="loadingState">
+    <div class="loader-ring"></div>
+    <div class="loading-text">Loading model metrics…</div>
+  </div>
+
+  <!-- Dashboard content (shown after fetch) -->
+  <div id="dashboardContent">
+
+    <!-- ── SIDE-BY-SIDE MODEL COMPARISON ──────────────── -->
+    <div class="divider" style="height:0.5rem"></div>
+    <div class="section-heading">Side-by-side model comparison</div>
+
+    <div class="comparison-section" id="comparisonSection">
+      <div style="display:flex;gap:1rem;margin-bottom:0.75rem;font-size:0.72rem;">
+        <div style="display:flex;align-items:center;gap:0.4rem;color:var(--muted)">
+          <div style="width:10px;height:3px;border-radius:2px;background:var(--teal)"></div>Detection model
+        </div>
+        <div style="display:flex;align-items:center;gap:0.4rem;color:var(--muted)">
+          <div style="width:10px;height:3px;border-radius:2px;background:var(--purple)"></div>Spread model
+        </div>
+      </div>
+      <!-- Rows populated by JS -->
+      <div id="comparisonRows"></div>
+    </div>
+
+    <!-- ── DETECTION MODEL ────────────────────────────── -->
+    <div class="section-heading">Detection model — burn scar segmentation</div>
+
+    <div class="model-header" id="detModelHeader">
+      <div class="model-header-accent" style="background:var(--teal)"></div>
+      <div>
+        <div class="model-name" id="detModelName">—</div>
+        <div class="model-sub" id="detModelSub">—</div>
+        <div class="model-tags" id="detModelTags"></div>
+      </div>
+      <div class="model-header-right">
+        <div class="best-epoch-val" id="detBestEpoch">—</div>
+        <div class="best-epoch-label">Best epoch</div>
+      </div>
+    </div>
+
+    <div class="metrics-grid" id="detMetricsGrid"></div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-card-title">Validation IoU curve</div>
+        <div class="chart-canvas-wrap"><canvas id="detIouChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Train vs. validation loss</div>
+        <div class="chart-canvas-wrap"><canvas id="detLossChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Confusion matrix</div>
+        <div style="display:flex;align-items:center;justify-content:center;height:180px;">
+          <div>
+            <div style="display:flex;gap:0.35rem;margin-bottom:0.35rem;justify-content:center;">
+              <div style="font-size:0.62rem;color:var(--muted);width:100px;text-align:center">Predicted Negative</div>
+              <div style="font-size:0.62rem;color:var(--muted);width:100px;text-align:center">Predicted Positive</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.35rem;">
+              <div style="font-size:0.62rem;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin-right:0.2rem">Actual</div>
+              <div class="confusion-grid" id="detConfMatrix"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Per-class breakdown</div>
+        <table class="breakdown-table" id="detBreakdown"></table>
+      </div>
+    </div>
+
+    <!-- ── SPREAD MODEL ───────────────────────────────── -->
+    <div class="section-heading" style="margin-top:1.5rem">Spread prediction model — next-day fire progression</div>
+
+    <div class="model-header" id="sprModelHeader">
+      <div class="model-header-accent" style="background:var(--purple)"></div>
+      <div>
+        <div class="model-name" id="sprModelName">—</div>
+        <div class="model-sub" id="sprModelSub">—</div>
+        <div class="model-tags" id="sprModelTags"></div>
+      </div>
+      <div class="model-header-right">
+        <div class="best-epoch-val" id="sprBestEpoch">—</div>
+        <div class="best-epoch-label">Best epoch</div>
+      </div>
+    </div>
+
+    <div class="metrics-grid" id="sprMetricsGrid"></div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-card-title">Validation IoU curve</div>
+        <div class="chart-canvas-wrap"><canvas id="sprIouChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Train vs. validation loss</div>
+        <div class="chart-canvas-wrap"><canvas id="sprLossChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Confusion matrix</div>
+        <div style="display:flex;align-items:center;justify-content:center;height:180px;">
+          <div>
+            <div style="display:flex;gap:0.35rem;margin-bottom:0.35rem;justify-content:center;">
+              <div style="font-size:0.62rem;color:var(--muted);width:100px;text-align:center">Predicted Negative</div>
+              <div style="font-size:0.62rem;color:var(--muted);width:100px;text-align:center">Predicted Positive</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.35rem;">
+              <div style="font-size:0.62rem;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin-right:0.2rem">Actual</div>
+              <div class="confusion-grid" id="sprConfMatrix"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Per-class breakdown</div>
+        <table class="breakdown-table" id="sprBreakdown"></table>
+      </div>
+    </div>
+
+    <!-- ── TRAINING ENVIRONMENT ───────────────────────── -->
+    <div class="section-heading" style="margin-top:1.5rem">Training environment</div>
+    <div class="info-grid" id="trainingInfoGrid"></div>
+
+  </div><!-- /dashboardContent -->
+</div>
+
+<script>
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 800 },
+  plugins: { legend: { display: false }, tooltip: { enabled: true } },
+  scales: {
+    x: {
+      grid: { color: 'rgba(255,255,255,0.04)' },
+      ticks: { color: '#6A7E95', font: { family: "'DM Mono'", size: 10 }, maxTicksLimit: 10 },
+      border: { color: 'rgba(255,255,255,0.08)' },
+    },
+    y: {
+      grid: { color: 'rgba(255,255,255,0.04)' },
+      ticks: { color: '#6A7E95', font: { family: "'DM Mono'", size: 10 } },
+      border: { color: 'rgba(255,255,255,0.08)' },
+    }
+  }
+};
+
+function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+function buildMetricsGrid(containerId, m, accentColor) {
+  const defs = [
+    { key:'iou',       label:'IoU',       cls:'iou',  val: pct(m.iou) },
+    { key:'f1',        label:'F1 Score',  cls:'f1',   val: pct(m.f1) },
+    { key:'precision', label:'Precision', cls:'prec', val: pct(m.precision) },
+    { key:'recall',    label:'Recall',    cls:'rec',  val: pct(m.recall) },
+    { key:'accuracy',  label:'Accuracy',  cls:'acc',  val: pct(m.accuracy) },
+  ];
+  const el = document.getElementById(containerId);
+  el.innerHTML = defs.map(d => `
+    <div class="metric-card ${d.cls}">
+      <div class="metric-val">${d.val}</div>
+      <div class="metric-label">${d.label}</div>
+      <div class="metric-bar">
+        <div class="metric-bar-fill" style="width:0%" data-target="${m[d.key]*100}"></div>
+      </div>
+    </div>
+  `).join('');
+  // Animate bars after render
+  setTimeout(() => {
+    el.querySelectorAll('.metric-bar-fill').forEach(bar => {
+      bar.style.width = bar.dataset.target + '%';
+    });
+  }, 100);
+}
+
+function buildModelHeader(prefix, m) {
+  document.getElementById(`${prefix}ModelName`).textContent  = m.model_name;
+  document.getElementById(`${prefix}ModelSub`).textContent   = m.dataset;
+  document.getElementById(`${prefix}BestEpoch`).textContent  = `${m.best_epoch}/${m.total_epochs}`;
+  const tagsEl = document.getElementById(`${prefix}ModelTags`);
+  [
+    m.architecture,
+    `${m.in_channels} input channels`,
+    `${m.params_M}M params`,
+  ].forEach(t => {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = t;
+    tagsEl.appendChild(tag);
+  });
+}
+
+function buildIouChart(canvasId, iouCurve, accentColor) {
+  const labels = iouCurve.map((_, i) => i + 1);
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: iouCurve,
+        borderColor: accentColor,
+        backgroundColor: accentColor + '18',
+        borderWidth: 1.5,
+        fill: true,
+        tension: 0.35,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      }]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      scales: {
+        ...CHART_DEFAULTS.scales,
+        y: { ...CHART_DEFAULTS.scales.y, min: 0, max: 1,
+             title: { display: true, text: 'IoU', color: '#6A7E95', font: { size: 10 } } },
+        x: { ...CHART_DEFAULTS.scales.x,
+             title: { display: true, text: 'Epoch', color: '#6A7E95', font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function buildLossChart(canvasId, trainLoss, valLoss) {
+  const labels = trainLoss.map((_, i) => i + 1);
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Train',
+          data: trainLoss,
+          borderColor: '#FF6422',
+          borderWidth: 1.5,
+          fill: false,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+        {
+          label: 'Val',
+          data: valLoss,
+          borderColor: '#60A5FA',
+          borderDash: [4, 3],
+          borderWidth: 1.5,
+          fill: false,
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        }
+      ]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        legend: {
+          display: true,
+          labels: { color: '#6A7E95', font: { family: "'DM Mono'", size: 10 }, boxWidth: 12, padding: 12 }
+        }
+      },
+      scales: {
+        ...CHART_DEFAULTS.scales,
+        y: { ...CHART_DEFAULTS.scales.y,
+             title: { display: true, text: 'Loss', color: '#6A7E95', font: { size: 10 } } },
+        x: { ...CHART_DEFAULTS.scales.x,
+             title: { display: true, text: 'Epoch', color: '#6A7E95', font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function buildConfusionMatrix(containerId, cm) {
+  // cm = [TN, FP, FN, TP] as proportions
+  const [tn, fp, fn, tp] = cm;
+  const cells = [
+    { val: tn, label: 'True\nNegative',  bg: 'rgba(34,211,160,0.15)', color: '#22D3A0' },
+    { val: fp, label: 'False\nPositive', bg: 'rgba(255,59,59,0.12)',   color: '#FF7070' },
+    { val: fn, label: 'False\nNegative', bg: 'rgba(255,176,32,0.12)',  color: '#FFB020' },
+    { val: tp, label: 'True\nPositive',  bg: 'rgba(34,211,160,0.25)',  color: '#22D3A0' },
+  ];
+  const el = document.getElementById(containerId);
+  el.innerHTML = cells.map(c => `
+    <div class="conf-cell" style="background:${c.bg}">
+      <div class="conf-val" style="color:${c.color}">${(c.val * 100).toFixed(1)}%</div>
+      <div class="conf-lbl">${c.label.replace('\n','<br>')}</div>
+    </div>
+  `).join('');
+}
+
+function buildBreakdown(tableId, breakdown) {
+  const el = document.getElementById(tableId);
+  const pill_colors = {
+    background: '#60A5FA', burn_scar: '#FF7070',
+    no_spread: '#22D3A0', spread: '#A78BFA'
+  };
+  el.innerHTML = `
+    <thead>
+      <tr>
+        <th>Class</th>
+        <th>Precision</th>
+        <th>Recall</th>
+        <th>F1</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${Object.entries(breakdown).map(([cls, v]) => `
+        <tr>
+          <td>
+            <span class="class-pill" style="background:${pill_colors[cls] || '#888'}22;color:${pill_colors[cls] || '#888'};border:1px solid ${pill_colors[cls] || '#888'}44">
+              ${cls.replace('_', ' ')}
+            </span>
+          </td>
+          <td>${pct(v.precision)}</td>
+          <td>${pct(v.recall)}</td>
+          <td>${pct(v.f1)}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  `;
+}
+
+function buildTrainingInfo(data) {
+  const t = data.training;
+  const d = data.detection;
+  const s = data.spread;
+  const items = [
+    { label: 'Platform',           val: t.platform },
+    { label: 'Detection train time', val: t.det_training_time },
+    { label: 'Spread train time',  val: t.spr_training_time },
+    { label: 'Batch size',         val: t.batch_size },
+    { label: 'Optimizer',          val: t.optimizer },
+    { label: 'LR scheduler',       val: t.scheduler },
+    { label: 'Detection loss',     val: t.det_loss },
+    { label: 'Spread loss',        val: t.spr_loss },
+    { label: 'Augmentation',       val: t.augmentation },
+    { label: 'Det. train / val',   val: `${t.det_train_samples.toLocaleString()} / ${t.det_val_samples.toLocaleString()}` },
+    { label: 'Spr. train / val',   val: `${t.spr_train_samples.toLocaleString()} / ${t.spr_val_samples.toLocaleString()}` },
+    { label: 'Det. params',        val: `${d.params_M}M` },
+  ];
+  const grid = document.getElementById('trainingInfoGrid');
+  grid.innerHTML = items.map(i => `
+    <div class="info-card">
+      <div class="info-label">${i.label}</div>
+      <div class="info-val">${i.val}</div>
+    </div>
+  `).join('');
+}
+
+function buildComparison(d, s) {
+  const metrics = [
+    { label: 'IoU',       det: d.iou,       spr: s.iou },
+    { label: 'F1',        det: d.f1,        spr: s.f1 },
+    { label: 'Precision', det: d.precision, spr: s.precision },
+    { label: 'Recall',    det: d.recall,    spr: s.recall },
+    { label: 'Accuracy',  det: d.accuracy,  spr: s.accuracy },
+  ];
+  const el = document.getElementById('comparisonRows');
+  el.innerHTML = metrics.map(m => `
+    <div class="comparison-row">
+      <div class="comp-label">${m.label}</div>
+      <div class="comp-bars">
+        <div class="comp-bar-row">
+          <div class="comp-model-label">Detection</div>
+          <div class="comp-bar-track">
+            <div class="comp-bar-fill" style="width:0%;background:var(--teal)" data-target="${m.det*100}"></div>
+          </div>
+          <div class="comp-bar-val">${pct(m.det)}</div>
+        </div>
+        <div class="comp-bar-row">
+          <div class="comp-model-label">Spread</div>
+          <div class="comp-bar-track">
+            <div class="comp-bar-fill" style="width:0%;background:var(--purple)" data-target="${m.spr*100}"></div>
+          </div>
+          <div class="comp-bar-val">${pct(m.spr)}</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  setTimeout(() => {
+    el.querySelectorAll('.comp-bar-fill').forEach(b => {
+      b.style.transition = 'width 1.2s ease';
+      b.style.width = b.dataset.target + '%';
+    });
+  }, 100);
+}
+
+// ── Fetch and render ─────────────────────────────────
+async function loadDashboard() {
+  try {
+    const resp = await fetch('/api/model_metrics');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    const d = data.detection;
+    const s = data.spread;
+
+    buildComparison(d, s);
+
+    buildModelHeader('det', d);
+    buildMetricsGrid('detMetricsGrid', d, '#22D3A0');
+    buildIouChart('detIouChart', d.iou_curve, '#22D3A0');
+    buildLossChart('detLossChart', d.loss_curve_train, d.loss_curve_val);
+    buildConfusionMatrix('detConfMatrix', d.confusion_matrix);
+    buildBreakdown('detBreakdown', d.class_breakdown);
+
+    buildModelHeader('spr', s);
+    buildMetricsGrid('sprMetricsGrid', s, '#A78BFA');
+    buildIouChart('sprIouChart', s.iou_curve, '#A78BFA');
+    buildLossChart('sprLossChart', s.loss_curve_train, s.loss_curve_val);
+    buildConfusionMatrix('sprConfMatrix', s.confusion_matrix);
+    buildBreakdown('sprBreakdown', s.class_breakdown);
+
+    buildTrainingInfo(data);
+
+    document.getElementById('loadingState').style.display    = 'none';
+    document.getElementById('dashboardContent').style.display = 'block';
+
+  } catch(e) {
+    document.getElementById('loadingState').innerHTML = `
+      <div style="font-family:var(--font-h);font-size:1rem;color:#FF7070">
+        Failed to load metrics: ${e.message}
+      </div>
+      <div style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem">
+        Make sure the FastAPI server is running at localhost:8000
+      </div>
+    `;
+    console.error(e);
+  }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>
