@@ -225,7 +225,8 @@ async def predict_with_bbox(req: BBoxRequest):
     det_b64 = fig_to_base64(fig_det)
 
     # 7. Spread risk — pass the refined burn_mask as PrevFireMask
-    pred_b64 = None
+    pred_b64  = None
+    elev_grid = None
     try:
         spread = bbox_inference_engine.predict(
             bands,
@@ -233,6 +234,8 @@ async def predict_with_bbox(req: BBoxRequest):
             date=req.date_from,
             burn_mask=burn_mask,
         )
+        elev_grid = spread.get('elev_grid')  # ← already fetched inside predict()
+
         if 'prediction_risk' in spread:
             fig_p, ax_p = plt.subplots(figsize=(5, 5))
             cmap = LinearSegmentedColormap.from_list(
@@ -248,16 +251,17 @@ async def predict_with_bbox(req: BBoxRequest):
         print(f"! Spread prediction error: {e}")
 
     return {
-        "burned_area_ha":     round(burned_area_ha, 2),
-        "co2_tonnes":         round(burned_area_ha * 25.4, 2),
-        "infrastructure":     infra_stats,
-        "severity_breakdown": sev_counts,
-        "overlay_base64":     det_b64,
+        "burned_area_ha":      round(burned_area_ha, 2),
+        "co2_tonnes":          round(burned_area_ha * 25.4, 2),
+        "infrastructure":      infra_stats,
+        "severity_breakdown":  sev_counts,
+        "overlay_base64":      det_b64,
         "predict_risk_base64": pred_b64,
-        "rgb_base64":         rgb_b64,
-        "pre_fire_base64":    pre_b64,
-        "severity_base64":    sev_b64,
-        "status":             "Success"
+        "rgb_base64":          rgb_b64,
+        "pre_fire_base64":     pre_b64,
+        "severity_base64":     sev_b64,
+        "elev_grid":           elev_grid,
+        "status":              "Success"
     }
 
 # --------------------------------------------------------

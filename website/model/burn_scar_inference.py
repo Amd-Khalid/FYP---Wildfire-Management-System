@@ -175,6 +175,12 @@ class BurnScarInference:
 
         # ── Elevation: Open-Elevation grid (free, no key) ───────────────
         # Sample a 5×5 grid of points across the bbox for spatial variation
+        # Safe defaults — overwritten if fetch succeeds
+        elev_map   = np.full((h, w), 500.0, dtype=np.float32)
+        slope_map  = np.zeros((h, w), dtype=np.float32)
+        aspect_map = np.zeros((h, w), dtype=np.float32)
+        drivers['elev_grid'] = None
+
         try:
             lats = np.linspace(min_lat, max_lat, 5)
             lons = np.linspace(min_lon, max_lon, 5)
@@ -189,11 +195,9 @@ class BurnScarInference:
             ).json()
             elevs = np.array([r['elevation'] for r in resp['results']],
                               dtype=np.float32).reshape(5, 5)
+            drivers['elev_grid'] = elevs.tolist()
 
-            # Upsample the 5×5 grid to (H, W)
             elev_map = cv2.resize(elevs, (w, h), interpolation=cv2.INTER_LINEAR)
-
-            # Compute slope and aspect from the elevation grid
             gy, gx = np.gradient(elev_map)
             slope_map  = np.degrees(np.arctan(np.sqrt(gx**2 + gy**2)))
             aspect_map = np.degrees(np.arctan2(-gx, gy)) % 360
@@ -202,17 +206,14 @@ class BurnScarInference:
 
         except Exception as e:
             print(f"! Elevation fetch failed: {e}. Using flat defaults.")
-            center_elev = 500.0
-            elev_map   = np.full((h, w), center_elev, dtype=np.float32)
-            slope_map  = np.zeros((h, w), dtype=np.float32)
-            aspect_map = np.zeros((h, w), dtype=np.float32)
+            # defaults already set above, nothing to do here
 
         drivers['elevation'] = elev_map
         drivers['slope']     = slope_map
         drivers['aspect']    = aspect_map
 
         return drivers
-
+    
     # ────────────────────────────────────────────────────────────────────────
     # Preprocessing
     # ────────────────────────────────────────────────────────────────────────
@@ -324,6 +325,8 @@ class BurnScarInference:
             prev_mask = burn_mask if burn_mask is not None else results['detection']
 
             drivers = self.get_spread_drivers(bbox, date, h, w)
+            results['elev_grid'] = drivers.get('elev_grid')  # ← add this
+
             pred_tensor = self._preprocess_spread(bands, prev_mask, drivers)
             pred_tensor, orig_shape = self._pad_to_32(pred_tensor.to(self.device))
             with torch.no_grad():

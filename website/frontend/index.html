@@ -1717,29 +1717,70 @@ async function initTerrain(flat=false) {
   terrainScene.add(fill);
 
   // Elevation grid
-  const GRID = 32;
+  // Elevation grid
+  const GRID = 64;  // was 32 — more vertices = smoother slopes
   let elevGrid = new Array(GRID*GRID).fill(0);
 
   if (!flat && lastPayload) {
     try {
-      const lats = linspace(lastPayload.min_lat, lastPayload.max_lat, GRID);
-      const lons = linspace(lastPayload.min_lon, lastPayload.max_lon, GRID);
-      const locations = [];
-      for (let r=0;r<GRID;r++) for (let c=0;c<GRID;c++) locations.push({latitude:lats[r],longitude:lons[c]});
+      if (lastData && lastData.elev_grid) {
+        const SRC = 5;
+        const src = lastData.elev_grid.flat();
 
-      // Batch into chunks of 100 (API limit)
-      const chunks = [];
-      for (let i=0;i<locations.length;i+=100) chunks.push(locations.slice(i,i+100));
-      const allElevs = [];
-      for (const chunk of chunks) {
-        const resp = await fetch('https://api.open-elevation.com/api/v1/lookup',{
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({locations:chunk})
-        });
-        const json = await resp.json();
-        json.results.forEach(r => allElevs.push(r.elevation));
+        // Bilinear interpolation: 5×5 → 64×64
+        for (let r = 0; r < GRID; r++) {
+          for (let c = 0; c < GRID; c++) {
+            const sr = (r / (GRID - 1)) * (SRC - 1);
+            const sc = (c / (GRID - 1)) * (SRC - 1);
+            const r0 = Math.floor(sr), r1 = Math.min(r0 + 1, SRC - 1);
+            const c0 = Math.floor(sc), c1 = Math.min(c0 + 1, SRC - 1);
+            const dr = sr - r0, dc = sc - c0;
+            elevGrid[r * GRID + c] =
+              src[r0 * SRC + c0] * (1 - dr) * (1 - dc) +
+              src[r1 * SRC + c0] *      dr  * (1 - dc) +
+              src[r0 * SRC + c1] * (1 - dr) *      dc  +
+              src[r1 * SRC + c1] *      dr  *      dc;
+          }
+        }
+
+        // Gaussian-style smooth pass — removes blocky interpolation artefacts
+        const smoothed = new Array(GRID * GRID).fill(0);
+        for (let r = 0; r < GRID; r++) {
+          for (let c = 0; c < GRID; c++) {
+            let sum = 0, weight = 0;
+            for (let dr = -2; dr <= 2; dr++) {
+              for (let dc = -2; dc <= 2; dc++) {
+                const nr = r + dr, nc = c + dc;
+                if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID) continue;
+                const w = Math.exp(-(dr*dr + dc*dc) / (2 * 1.5 * 1.5));
+                sum    += elevGrid[nr * GRID + nc] * w;
+                weight += w;
+              }
+            }
+            smoothed[r * GRID + c] = sum / weight;
+          }
+        }
+        elevGrid = smoothed;
+
+      } else {
+        // Fallback: live API fetch
+        const lats = linspace(lastPayload.min_lat, lastPayload.max_lat, GRID);
+        const lons = linspace(lastPayload.min_lon, lastPayload.max_lon, GRID);
+        const locations = [];
+        for (let r=0;r<GRID;r++) for (let c=0;c<GRID;c++) locations.push({latitude:lats[r],longitude:lons[c]});
+        const chunks = [];
+        for (let i=0;i<locations.length;i+=100) chunks.push(locations.slice(i,i+100));
+        const allElevs = [];
+        for (const chunk of chunks) {
+          const resp = await fetch('https://api.open-elevation.com/api/v1/lookup',{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({locations:chunk})
+          });
+          const json = await resp.json();
+          json.results.forEach(r => allElevs.push(r.elevation));
+        }
+        elevGrid = allElevs;
       }
-      elevGrid = allElevs;
     } catch(e) {
       console.warn('Elevation fetch failed, using flat terrain:', e);
     }
@@ -1749,9 +1790,8 @@ async function initTerrain(flat=false) {
   const minE = Math.min(...elevGrid);
   const maxE = Math.max(...elevGrid);
   const range = Math.max(maxE - minE, 1);
-  const normElev = elevGrid.map(e => (e-minE)/range);
+  const normElev = elevGrid.map(e => (e - minE) / range);
 
-  // Aspect ratio of the bbox
   const dLon = lastPayload ? Math.abs(lastPayload.max_lon - lastPayload.min_lon) : 1;
   const dLat = lastPayload ? Math.abs(lastPayload.max_lat - lastPayload.min_lat) : 1;
   const aspect = dLat / dLon;
