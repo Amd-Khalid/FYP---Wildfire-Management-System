@@ -335,7 +335,8 @@ select option { background: #0f1c2e; color: var(--text); }
   background: rgba(255,59,59,0.1);
   border-radius: 4px;
 }
-.infra-count.roads { color: var(--accent2); background: rgba(255,176,32,0.1); }
+.infra-count.roads    { color: var(--accent2); background: rgba(255,176,32,0.1); }
+.infra-count.at-risk  { color: #f59e0b;       background: rgba(245,158,11,0.12); }
 
 /* ─── TABS ────────────────────────────────────────────── */
 .tabs-bar {
@@ -852,12 +853,20 @@ select option { background: #0f1c2e; color: var(--text); }
         <div style="margin-top:0.75rem;">
           <div class="section-label">Infrastructure at Risk</div>
           <div class="infra-row">
-            <span class="infra-name">🏢 Buildings Affected</span>
+            <span class="infra-name">🏢 Buildings Destroyed</span>
             <span class="infra-count" id="valBuildings">0</span>
           </div>
           <div class="infra-row">
-            <span class="infra-name">🛣️ Road Segments</span>
+            <span class="infra-name">🏢 Buildings At Risk</span>
+            <span class="infra-count at-risk" id="valBuildingsAtRisk">0</span>
+          </div>
+          <div class="infra-row">
+            <span class="infra-name">🛣️ Roads Destroyed</span>
             <span class="infra-count roads" id="valRoads">0</span>
+          </div>
+          <div class="infra-row">
+            <span class="infra-name">🛣️ Roads At Risk</span>
+            <span class="infra-count at-risk" id="valRoadsAtRisk">0</span>
           </div>
         </div>
 
@@ -886,9 +895,13 @@ select option { background: #0f1c2e; color: var(--text); }
             <div class="colorbar-label"><span>Low</span><span>Moderate</span><span>High</span><span>Severe</span></div>
           </div>
 
-          <div id="tab-compare" class="tab-content" style="margin-top:0.5rem;">
+          <div id="tab-compare" class="tab-content" style="margin-top:0.5rem;position:relative;">
             <div class="field-label" style="margin-bottom:0.35rem;">Pre-Fire (30 days prior)</div>
             <img id="preFireImg" class="tab-img" src="" alt="Pre-fire image unavailable">
+            <div id="preFireCloudNotice" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:rgba(6,14,28,0.72);flex-direction:column;gap:0.5rem;border-radius:6px;">
+              <span style="font-size:1.8rem;">&#9729;</span>
+              <span style="color:#94a3b8;font-size:0.8rem;text-align:center;padding:0 1rem;">Before image unavailable<br>Cloud cover &gt;30% in pre-fire window</span>
+            </div>
             <div class="field-label" style="margin-top:0.6rem;margin-bottom:0.35rem;">Post-Fire</div>
             <img id="rgbImg" class="tab-img" src="" alt="">
           </div>
@@ -1275,9 +1288,21 @@ async function runAnalysis() {
     const setImg = (id,b64)=>{ const el=document.getElementById(id); if(el&&b64) el.src='data:image/png;base64,'+b64; };
     setImg('overlayImg',  data.overlay_base64);
     setImg('severityImg', data.severity_base64);
-    setImg('preFireImg',  data.pre_fire_base64);
     setImg('rgbImg',      data.rgb_base64);
     setImg('predictImg',  data.predict_risk_base64);
+    // Cloud cover gate: if backend suppressed the before image show a notice
+    const preFireEl = document.getElementById('preFireImg');
+    if (data.pre_fire_base64) {
+      preFireEl.src = 'data:image/png;base64,' + data.pre_fire_base64;
+      preFireEl.style.filter = '';
+      const notice = document.getElementById('preFireCloudNotice');
+      if (notice) notice.style.display = 'none';
+    } else {
+      preFireEl.src = '';
+      preFireEl.style.filter = 'opacity(0.15)';
+      const notice = document.getElementById('preFireCloudNotice');
+      if (notice) notice.style.display = 'flex';
+    }
 
     // Store textures for 3D viewer
     terrainTextures = {
@@ -1313,8 +1338,10 @@ async function runAnalysis() {
 
     // Infrastructure
     const infra = data.infrastructure || {};
-    document.getElementById('valBuildings').textContent = infra.buildings_risk ?? 0;
-    document.getElementById('valRoads').textContent     = infra.roads_risk ?? 0;
+    document.getElementById('valBuildings').textContent        = infra.buildings_risk    ?? 0;
+    document.getElementById('valBuildingsAtRisk').textContent  = infra.buildings_at_risk ?? 0;
+    document.getElementById('valRoads').textContent            = infra.roads_risk        ?? 0;
+    document.getElementById('valRoadsAtRisk').textContent      = infra.roads_at_risk     ?? 0;
 
     // Enable 3D terrain
     document.getElementById('terrain3dBtn').disabled = false;
@@ -1532,8 +1559,10 @@ async function exportPDF() {
     const metrics = [
       ['Burned Area',        `${lastData.burned_area_ha} ha`],
       ['Estimated CO₂',      `${lastData.co2_tonnes} tonnes`],
-      ['Buildings Affected', `${lastData.infrastructure?.buildings_risk ?? 0}`],
-      ['Road Segments',      `${lastData.infrastructure?.roads_risk ?? 0}`],
+      ['Buildings Destroyed', `${lastData.infrastructure?.buildings_risk    ?? 0}`],
+      ['Buildings At Risk',   `${lastData.infrastructure?.buildings_at_risk ?? 0}`],
+      ['Roads Destroyed',     `${lastData.infrastructure?.roads_risk        ?? 0}`],
+      ['Roads At Risk',       `${lastData.infrastructure?.roads_at_risk     ?? 0}`],
       ['Detection Confidence', '91.2%'],
     ];
     doc.setFontSize(9);

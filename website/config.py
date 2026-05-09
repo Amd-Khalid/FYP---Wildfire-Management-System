@@ -1,5 +1,5 @@
-SENTINEL_CLIENT_ID = "sh-81b3fd1c-68b3-4d74-b2bf-aa9b58a661f7"
-SENTINEL_CLIENT_SECRET = "EkTxqiSBKo3ld82S0e4Xk835xrViDP11"
+SENTINEL_CLIENT_ID = "sh-7fc18756-935c-49dd-a6fd-3e33fe03ffef"
+SENTINEL_CLIENT_SECRET = "HCJ1nZhjZUl1m1P9KknyMpsBv334OVdE"
 
 
 SENTINEL_TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"

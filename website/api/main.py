@@ -93,6 +93,7 @@ def filter_small_blobs(mask, min_size):
     return mask
 
 def check_infrastructure(bbox, burn_mask):
+    from scipy.ndimage import binary_dilation
     min_lon, min_lat, max_lon, max_lat = bbox
     overpass_url = "http://overpass-api.de/api/interpreter"
     query = (
@@ -107,28 +108,60 @@ def check_infrastructure(bbox, burn_mask):
             el['id']: (el['lon'], el['lat'])
             for el in data.get("elements", []) if el.get('type') == 'node'
         }
-        b_hits, r_hits = 0, 0
         h, w = burn_mask.shape
         transform = from_bounds(min_lon, min_lat, max_lon, max_lat, w, h)
 
+        # ~300 m buffer around the burn perimeter (at 512px over a typical bbox
+        # each iteration ≈ 20-40 m, so 8 iterations ≈ 160-320 m)
+        buffer_mask = binary_dilation(burn_mask.astype(bool), iterations=8)
+        at_risk_zone = buffer_mask & ~burn_mask.astype(bool)
+
+        b_in_burn, b_at_risk = 0, 0
+        r_in_burn, r_at_risk = 0, 0
+
         for el in [e for e in data.get("elements", []) if e.get('type') == 'way']:
             coords = [nodes[nid] for nid in el.get('nodes', []) if nid in nodes]
-            if not coords: continue
+            if not coords:
+                continue
             tags = el.get('tags') or {}
+            is_building = 'building' in tags
             geom = (
                 {"type": "Polygon",    "coordinates": [coords + [coords[0]]]}
-                if 'building' in tags else
+                if is_building else
                 {"type": "LineString", "coordinates": coords}
             )
+            # all_touched=True is critical — without it, small buildings and
+            # thin roads rasterize to zero pixels at 512px coarse resolution
             raster = rasterio.features.rasterize(
-                [(geom, 1)], out_shape=(h, w), transform=transform
+                [(geom, 1)], out_shape=(h, w), transform=transform,
+                all_touched=True
             )
-            if np.any((raster == 1) & (burn_mask == 1)):
-                if 'building' in tags: b_hits += 1
-                else:                  r_hits += 1
-        return {"buildings_risk": b_hits, "roads_risk": r_hits}
-    except:
-        return {"buildings_risk": 0, "roads_risk": 0}
+            feat_pixels = raster == 1
+            if not np.any(feat_pixels):
+                continue
+            if is_building:
+                if np.any(feat_pixels & burn_mask.astype(bool)):
+                    b_in_burn += 1
+                elif np.any(feat_pixels & at_risk_zone):
+                    b_at_risk += 1
+            else:
+                if np.any(feat_pixels & burn_mask.astype(bool)):
+                    r_in_burn += 1
+                elif np.any(feat_pixels & at_risk_zone):
+                    r_at_risk += 1
+
+        return {
+            "buildings_risk":    b_in_burn,
+            "buildings_at_risk": b_at_risk,
+            "roads_risk":        r_in_burn,
+            "roads_at_risk":     r_at_risk,
+        }
+    except Exception as e:
+        print(f"! Infrastructure check error: {e}")
+        return {
+            "buildings_risk": 0, "buildings_at_risk": 0,
+            "roads_risk": 0,     "roads_at_risk": 0,
+        }
 
 def robust_rgb_stretch(rgb_bands):
     """Ensures satellite imagery is bright and high-contrast."""
@@ -192,6 +225,15 @@ async def predict_with_bbox(req: BBoxRequest):
         pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=45)).strftime("%Y-%m-%d")
         pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
 
+        # Cloud quality gate: Sentinel-2 B02 (blue, index 0) raw DN > 1800
+        # is a reliable indicator of cloud/haze for L2A surface reflectance.
+        # If more than 30 % of pixels are cloudy we suppress the before image
+        # rather than show a white/grey wash.
+        cloud_fraction = float(np.mean(pre_bands[0] > 1800))
+        if cloud_fraction > 0.30:
+            print(f"! Pre-fire scene cloud fraction {cloud_fraction:.0%} > 30% — suppressing before image")
+            raise ValueError(f"Cloud cover {cloud_fraction:.0%}")
+
         pre_rgb_raw = np.stack([pre_bands[2], pre_bands[1], pre_bands[0]], -1)
         fig_pre, ax_pre = plt.subplots(figsize=(5, 5))
         ax_pre.imshow(robust_rgb_stretch(pre_rgb_raw))
@@ -241,8 +283,15 @@ async def predict_with_bbox(req: BBoxRequest):
             cmap = LinearSegmentedColormap.from_list(
                 "spread", ["#00000000", "#fbbf24", "#ef4444", "#7f1d1d"]
             )
-            risk = np.where(spread['prediction_risk'] > 0.15, spread['prediction_risk'], 0.0)
+            risk_raw = spread['prediction_risk']
+            # Lower threshold reveals spread arms beyond the fire core.
+            # The old 0.15 threshold clipped most of the spread signal.
+            risk = np.where(risk_raw > 0.05, risk_raw, 0.0)
             risk[0:5, :], risk[-5:, :], risk[:, 0:5], risk[:, -5:] = 0, 0, 0, 0
+            # Normalize so faint spread arms are visible relative to the peak,
+            # not drowned out by the high-confidence region hugging the burn core.
+            if risk.max() > 0:
+                risk = risk / risk.max()
             ax_p.imshow(rgb_vis)
             ax_p.imshow(risk, cmap=cmap, alpha=0.75)
             ax_p.axis('off')
