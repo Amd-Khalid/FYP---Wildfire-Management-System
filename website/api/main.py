@@ -103,7 +103,14 @@ def check_infrastructure(bbox, burn_mask):
         f'(._;>;);out body;'
     )
     try:
-        data = requests.get(overpass_url, params={'data': query}, timeout=30).json()
+        headers = {"User-Agent": "FEWMS-Wildfire-Analytics/1.0"}
+        resp = requests.get("https://overpass-api.de/api/interpreter", params={'data': query}, headers=headers, timeout=45)
+        
+        if not resp.ok:
+            print(f"! Overpass Infra Error: HTTP {resp.status_code} - {resp.text[:150]}")
+            return {"buildings_risk": 0, "buildings_at_risk": 0, "roads_risk": 0, "roads_at_risk": 0}
+            
+        data = resp.json()
         nodes = {
             el['id']: (el['lon'], el['lat'])
             for el in data.get("elements", []) if el.get('type') == 'node'
@@ -364,9 +371,16 @@ async def evacuation_routes(req: EvacRequest):
         f'(._;>;);out body;'
     )
     try:
-        osm = requests.get(overpass_url, params={'data': query}, timeout=35).json()
+        headers = {"User-Agent": "FEWMS-Wildfire-Analytics/1.0"}
+        resp = requests.get("https://overpass-api.de/api/interpreter", params={'data': query}, headers=headers, timeout=45)
+        
+        if not resp.ok:
+            print(f"! Overpass Evac Error: HTTP {resp.status_code} - {resp.text[:150]}")
+            raise HTTPException(500, f"Overpass API rejected the query. HTTP {resp.status_code}")
+            
+        osm = resp.json()
     except Exception as e:
-        raise HTTPException(500, f"OSM query failed: {e}")
+        raise HTTPException(500, f"OSM request crashed: {e}")
 
     nodes = {
         el['id']: (el['lon'], el['lat'])
