@@ -95,16 +95,20 @@ def filter_small_blobs(mask, min_size):
 def check_infrastructure(bbox, burn_mask):
     from scipy.ndimage import binary_dilation
     min_lon, min_lat, max_lon, max_lat = bbox
-    overpass_url = "http://overpass-api.de/api/interpreter"
+    # maxsize caps the Overpass response at ~8 MB — prevents hanging on
+    # dense urban areas like LA where the full query can return 50k+ ways.
     query = (
-        f'[out:json][timeout:25];'
+        f'[out:json][timeout:20][maxsize:8000000];'
         f'(way["building"]({min_lat},{min_lon},{max_lat},{max_lon});'
         f'way["highway"]({min_lat},{min_lon},{max_lat},{max_lon}););'
         f'(._;>;);out body;'
     )
     try:
         headers = {"User-Agent": "FEWMS-Wildfire-Analytics/1.0"}
-        resp = requests.get("https://overpass-api.de/api/interpreter", params={'data': query}, headers=headers, timeout=45)
+        # (connect timeout, read timeout) — avoids silent Windows socket hangs
+        resp = requests.get("https://overpass-api.de/api/interpreter",
+                            params={'data': query}, headers=headers,
+                            timeout=(6, 25))
         
         if not resp.ok:
             print(f"! Overpass Infra Error: HTTP {resp.status_code} - {resp.text[:150]}")
@@ -118,15 +122,22 @@ def check_infrastructure(bbox, burn_mask):
         h, w = burn_mask.shape
         transform = from_bounds(min_lon, min_lat, max_lon, max_lat, w, h)
 
-        # ~300 m buffer around the burn perimeter (at 512px over a typical bbox
-        # each iteration ≈ 20-40 m, so 8 iterations ≈ 160-320 m)
         buffer_mask = binary_dilation(burn_mask.astype(bool), iterations=8)
         at_risk_zone = buffer_mask & ~burn_mask.astype(bool)
 
         b_in_burn, b_at_risk = 0, 0
         r_in_burn, r_at_risk = 0, 0
 
-        for el in [e for e in data.get("elements", []) if e.get('type') == 'way']:
+        ways = [e for e in data.get("elements", []) if e.get('type') == 'way']
+
+        # Hard cap: rasterizing 50k+ ways in a dense city like LA takes
+        # minutes on CPU. 3000 ways is plenty for a meaningful count.
+        MAX_WAYS = 3000
+        if len(ways) > MAX_WAYS:
+            print(f"  Overpass returned {len(ways)} ways — capping at {MAX_WAYS} to avoid timeout")
+            ways = ways[:MAX_WAYS]
+
+        for el in ways:
             coords = [nodes[nid] for nid in el.get('nodes', []) if nid in nodes]
             if not coords:
                 continue
@@ -137,8 +148,6 @@ def check_infrastructure(bbox, burn_mask):
                 if is_building else
                 {"type": "LineString", "coordinates": coords}
             )
-            # all_touched=True is critical — without it, small buildings and
-            # thin roads rasterize to zero pixels at 512px coarse resolution
             raster = rasterio.features.rasterize(
                 [(geom, 1)], out_shape=(h, w), transform=transform,
                 all_touched=True
@@ -204,11 +213,11 @@ async def predict_with_bbox(req: BBoxRequest):
     nbr_post = (nir - swir)  / (nir + swir + 1e-8)
     burn_mask = (
         (res['detection'] == 1) &
-        (res['det_confidence'] > 0.90) &
+        (res['det_confidence'] > 0.75) &
         (ndwi <= 0.0) &
-        (nbr_post < 0.10)
+        (nbr_post < 0.15)
     )
-    burn_mask = filter_small_blobs(binary_closing(burn_mask), 50)
+    burn_mask = filter_small_blobs(binary_closing(burn_mask), 30)
 
     # 4. Analytics
     burned_pixels  = int(np.sum(burn_mask))
@@ -228,18 +237,42 @@ async def predict_with_bbox(req: BBoxRequest):
     rgb_vis      = robust_rgb_stretch(post_rgb_raw)
 
     try:
-        pre_date_to   = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=20)).strftime("%Y-%m-%d")
-        pre_date_from = (datetime.strptime(req.date_from, "%Y-%m-%d") - timedelta(days=45)).strftime("%Y-%m-%d")
-        pre_bands = sentinel_api.download_imagery(bbox, pre_date_from, pre_date_to)
+        fire_date = datetime.strptime(req.date_from, "%Y-%m-%d")
+        # Three cascading windows. If window 1 is cloudy (e.g. Creek Fire smoke),
+        # we fall back further until we find a clean scene.
+        # Window 3 samples the same season one year prior — almost always cloud-free.
+        pre_windows = [
+            (fire_date - timedelta(days=45),  fire_date - timedelta(days=20)),
+            (fire_date - timedelta(days=90),  fire_date - timedelta(days=46)),
+            (fire_date - timedelta(days=365), fire_date - timedelta(days=335)),
+        ]
 
-        # Cloud quality gate: Sentinel-2 B02 (blue, index 0) raw DN > 1800
-        # is a reliable indicator of cloud/haze for L2A surface reflectance.
-        # If more than 30 % of pixels are cloudy we suppress the before image
-        # rather than show a white/grey wash.
-        cloud_fraction = float(np.mean(pre_bands[0] > 1800))
-        if cloud_fraction > 0.30:
-            print(f"! Pre-fire scene cloud fraction {cloud_fraction:.0%} > 30% — suppressing before image")
-            raise ValueError(f"Cloud cover {cloud_fraction:.0%}")
+        pre_bands = None
+        used_window = None
+        for w_start, w_end in pre_windows:
+            w_from = w_start.strftime("%Y-%m-%d")
+            w_to   = w_end.strftime("%Y-%m-%d")
+            try:
+                # Use tighter cloud cover cap (10%) on the API request for pre-fire
+                candidate = sentinel_api.download_imagery(bbox, w_from, w_to, max_cloud_cover=10.0)
+            except Exception as fetch_err:
+                print(f"! Pre-fire fetch failed for window {w_from}–{w_to}: {fetch_err}")
+                continue
+
+            # Multi-band cloud check: require BOTH Blue (B02) AND Green (B03) to be
+            # bright (>3500 DN in L2A 0-10000 scale). Fixes the old 1800 threshold
+            # which was flagging dry soil and light vegetation as cloud.
+            cloud_fraction = float(np.mean((candidate[0] > 3500) & (candidate[1] > 3500)))
+            print(f"  Pre-fire window {w_from}–{w_to}: cloud fraction {cloud_fraction:.0%}")
+            if cloud_fraction <= 0.15:
+                pre_bands    = candidate
+                used_window  = (w_from, w_to)
+                break
+            else:
+                print(f"  ! Cloud fraction {cloud_fraction:.0%} > 15% — trying next window")
+
+        if pre_bands is None:
+            raise ValueError("All pre-fire windows exceeded cloud threshold")
 
         pre_rgb_raw = np.stack([pre_bands[2], pre_bands[1], pre_bands[0]], -1)
         fig_pre, ax_pre = plt.subplots(figsize=(5, 5))
@@ -286,21 +319,26 @@ async def predict_with_bbox(req: BBoxRequest):
         elev_grid = spread.get('elev_grid')  # ← already fetched inside predict()
 
         if 'prediction_risk' in spread:
+            from scipy.ndimage import distance_transform_edt
             fig_p, ax_p = plt.subplots(figsize=(5, 5))
             cmap = LinearSegmentedColormap.from_list(
                 "spread", ["#00000000", "#fbbf24", "#ef4444", "#7f1d1d"]
             )
             risk_raw = spread['prediction_risk']
-            # Lower threshold reveals spread arms beyond the fire core.
-            # The old 0.15 threshold clipped most of the spread signal.
-            risk = np.where(risk_raw > 0.05, risk_raw, 0.0)
+
+            # Distance from burn edge in pixels.
+            # Fire can't teleport — only show spread risk within ~80px of the
+            # burn perimeter (~6-8 km depending on bbox size), which is a
+            # physically realistic next-day spread distance.
+            # This kills the false high-risk flood over distant dry flatland.
+            dist_from_burn = distance_transform_edt(~burn_mask.astype(bool))
+            spread_zone = (dist_from_burn > 0) & (dist_from_burn <= 110)
+
+            risk = np.where(spread_zone & (risk_raw > 0.15), risk_raw, 0.0)
             risk[0:5, :], risk[-5:, :], risk[:, 0:5], risk[:, -5:] = 0, 0, 0, 0
-            # Normalize so faint spread arms are visible relative to the peak,
-            # not drowned out by the high-confidence region hugging the burn core.
-            if risk.max() > 0:
-                risk = risk / risk.max()
+
             ax_p.imshow(rgb_vis)
-            ax_p.imshow(risk, cmap=cmap, alpha=0.75)
+            ax_p.imshow(risk, cmap=cmap, vmin=0.30, vmax=1.0, alpha=0.75)
             ax_p.axis('off')
             pred_b64 = fig_to_base64(fig_p)
     except Exception as e:
@@ -351,11 +389,11 @@ async def evacuation_routes(req: EvacRequest):
     nbr_post = (nir - swir)  / (nir + swir + 1e-8)
     burn_mask = (
         (res['detection'] == 1) &
-        (res['det_confidence'] > 0.90) &
+        (res['det_confidence'] > 0.75) &
         (ndwi <= 0.0) &
-        (nbr_post < 0.10)
+        (nbr_post < 0.15)
     )
-    burn_mask = filter_small_blobs(binary_closing(burn_mask), 50)
+    burn_mask = filter_small_blobs(binary_closing(burn_mask), 30)
 
     from scipy.ndimage import binary_dilation
     buffer_mask = binary_dilation(burn_mask, iterations=8)
@@ -468,11 +506,11 @@ async def baseline_comparison(req: BBoxRequest):
     nbr_post = (nir - swir)  / (nir + swir + 1e-8)
     burn_mask = (
         (res['detection'] == 1) &
-        (res['det_confidence'] > 0.90) &
+        (res['det_confidence'] > 0.75) &
         (ndwi <= 0.0) &
-        (nbr_post < 0.10)
+        (nbr_post < 0.15)
     )
-    burn_mask = filter_small_blobs(binary_closing(burn_mask), 50)
+    burn_mask = filter_small_blobs(binary_closing(burn_mask), 30)
 
     spread_res = bbox_inference_engine.predict(
         bands, bbox=bbox, date=req.date_from, burn_mask=burn_mask
@@ -505,12 +543,48 @@ async def baseline_comparison(req: BBoxRequest):
     except Exception as e:
         print(f"! Wind fetch: {e}")
 
-    # Build naive ellipse in wind direction
-    spread_dir_rad = math.radians(wind_dir_deg + 180)
-    pixel_scale    = max(h, w) / 20.0
-    major_axis     = int(pixel_scale * (wind_speed_kmh / 15.0) * 2.5)
-    minor_axis     = max(int(major_axis * 0.45), 10)
-    offset_px      = int(pixel_scale * 0.8)
+    # Build slope/aspect-aware ellipse in wind direction
+    # Pull slope and aspect maps exposed by predict()
+    slope_map  = spread_res.get('slope_map')   # (H, W) degrees, or None
+    aspect_map = spread_res.get('aspect_map')  # (H, W) degrees clockwise from N, or None
+
+    pixel_scale = max(h, w) / 20.0
+    major_axis  = int(pixel_scale * (wind_speed_kmh / 15.0) * 2.5)
+    minor_axis  = max(int(major_axis * 0.45), 10)
+    offset_px   = int(pixel_scale * 0.8)
+
+    # Wind spread direction (meteorological convention → where fire goes)
+    wind_rad = math.radians(wind_dir_deg + 180)
+
+    if slope_map is not None and aspect_map is not None:
+        # Sample terrain at the fire centroid neighbourhood (±20 px)
+        r0, r1 = max(0, cy - 20), min(h, cy + 20)
+        c0, c1 = max(0, cx - 20), min(w, cx + 20)
+        local_slope  = float(np.mean(slope_map[r0:r1, c0:c1]))
+        local_aspect = float(np.mean(aspect_map[r0:r1, c0:c1]))
+
+        # Aspect gives the downhill direction; fire spreads uphill → add 180°
+        uphill_rad = math.radians((local_aspect + 180) % 360)
+
+        # Weight terrain vs wind: a 30° slope gives full terrain control,
+        # flat ground is pure wind-driven.
+        terrain_weight = min(local_slope / 30.0, 1.0)
+
+        # Vector blend of uphill and wind directions
+        ux = math.sin(uphill_rad) * terrain_weight + math.sin(wind_rad) * (1.0 - terrain_weight)
+        uy = math.cos(uphill_rad) * terrain_weight + math.cos(wind_rad) * (1.0 - terrain_weight)
+        spread_dir_rad = math.atan2(ux, uy)
+
+        # Rothermel approximation: rate of spread roughly doubles every ~10° of slope
+        slope_factor = 1.0 + (local_slope / 10.0) * 0.35
+        major_axis   = int(major_axis * slope_factor)
+        minor_axis   = max(int(major_axis * 0.45), 10)
+
+        print(f"✓ Naive baseline: slope={local_slope:.1f}° aspect={local_aspect:.0f}° "
+              f"terrain_weight={terrain_weight:.2f} spread_dir={math.degrees(spread_dir_rad):.0f}°")
+    else:
+        spread_dir_rad = wind_rad
+        print(f"✓ Naive baseline: wind-only (no terrain data), dir={wind_dir_deg:.0f}°")
     naive_cy = int(cy - offset_px * math.cos(spread_dir_rad))
     naive_cx = int(cx + offset_px * math.sin(spread_dir_rad))
 

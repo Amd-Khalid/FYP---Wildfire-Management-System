@@ -74,7 +74,7 @@ class BurnScarInference:
             activation=None,
         ).to(self.device)
         self.detection_model.load_state_dict(
-            torch.load(detection_path, map_location=self.device)
+            torch.load(detection_path, map_location=self.device, weights_only=False)
         )
         self.detection_model.eval()
         print(f"✓ Detection model loaded from {detection_path}")
@@ -92,7 +92,7 @@ class BurnScarInference:
 
         if prediction_path:
             self.prediction_model.load_state_dict(
-                torch.load(prediction_path, map_location=self.device)
+                torch.load(prediction_path, map_location=self.device, weights_only=False)
             )
             self._spread_trained = True
             print(f"✓ Spread model loaded from {prediction_path}")
@@ -185,16 +185,19 @@ class BurnScarInference:
             lats = np.linspace(min_lat, max_lat, 5)
             lons = np.linspace(min_lon, max_lon, 5)
             lo_grid, la_grid = np.meshgrid(lons, lats)
-            locations = [
-                {"latitude": float(la), "longitude": float(lo)}
-                for la, lo in zip(la_grid.ravel(), lo_grid.ravel())
-            ]
-            resp = requests.post(
-                "https://api.open-elevation.com/api/v1/lookup",
-                json={"locations": locations}, timeout=10
-            ).json()
-            elevs = np.array([r['elevation'] for r in resp['results']],
-                              dtype=np.float32).reshape(5, 5)
+            flat_lats = la_grid.ravel()
+            flat_lons = lo_grid.ravel()
+
+            # Open-Meteo elevation — same provider as the weather calls,
+            # free, no key, reliable. Replaces api.open-elevation.com which
+            # times out constantly.
+            elev_url = (
+                f"https://api.open-meteo.com/v1/elevation"
+                f"?latitude={','.join(f'{v:.5f}' for v in flat_lats)}"
+                f"&longitude={','.join(f'{v:.5f}' for v in flat_lons)}"
+            )
+            resp  = requests.get(elev_url, timeout=8).json()
+            elevs = np.array(resp['elevation'], dtype=np.float32).reshape(5, 5)
             drivers['elev_grid'] = elevs.tolist()
 
             elev_map = cv2.resize(elevs, (w, h), interpolation=cv2.INTER_LINEAR)
@@ -325,7 +328,9 @@ class BurnScarInference:
             prev_mask = burn_mask if burn_mask is not None else results['detection']
 
             drivers = self.get_spread_drivers(bbox, date, h, w)
-            results['elev_grid'] = drivers.get('elev_grid')  # ← add this
+            results['elev_grid']  = drivers.get('elev_grid')
+            results['slope_map']  = drivers.get('slope')
+            results['aspect_map'] = drivers.get('aspect')
 
             pred_tensor = self._preprocess_spread(bands, prev_mask, drivers)
             pred_tensor, orig_shape = self._pad_to_32(pred_tensor.to(self.device))
